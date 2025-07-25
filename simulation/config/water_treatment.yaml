@@ -1,0 +1,123 @@
+### Water Treatment Plant Simulation Configuration ###
+
+# Simulation parameters
+simulation:
+  name: "Water Treatment Plant"
+  description: "Simulation of a water treatment facility with MODBUS-enabled PLCs"
+  mode: "realtime"  # realtime or accelerated
+  duration: -1  # -1 for indefinite runtime
+  log_level: "info"
+
+# Network configuration
+network:
+  subnet: "192.168.1.0/24"
+  gateway: "192.168.1.1"
+  plc_address: "192.168.1.10"
+  hmi_address: "192.168.1.20"
+  attacker_address: "192.168.1.100"
+
+# PLC configuration
+plc:
+  - name: "PLC_Main"
+    address: "192.168.1.10"
+    protocol: "modbus"
+    port: 502
+    registers:
+      - name: "Pump1_Speed"
+        address: 1000
+        type: "holding"
+        value: 0
+        min: 0
+        max: 100
+      - name: "Pump2_Speed"
+        address: 1001
+        type: "holding"
+        value: 0
+        min: 0
+        max: 100
+      - name: "Valve1_Position"
+        address: 1002
+        type: "holding"
+        value: 0
+        min: 0
+        max: 100
+      - name: "Valve2_Position"
+        address: 1003
+        type: "holding"
+        value: 0
+        min: 0
+        max: 100
+      - name: "Tank1_Level"
+        address: 2000
+        type: "input"
+        value: 50
+        min: 0
+        max: 100
+      - name: "Tank2_Level"
+        address: 2001
+        type: "input"
+        value: 30
+        min: 0
+        max: 100
+      - name: "Flow_Rate"
+        address: 2002
+        type: "input"
+        value: 0
+        min: 0
+        max: 1000
+      - name: "Water_Pressure"
+        address: 2003
+        type: "input"
+        value: 0
+        min: 0
+        max: 100
+      - name: "Pump1_Status"
+        address: 3000
+        type: "coil"
+        value: 0
+      - name: "Pump2_Status"
+        address: 3001
+        type: "coil"
+        value: 0
+      - name: "Alarm_HighLevel"
+        address: 3002
+        type: "discrete_input"
+        value: 0
+      - name: "Alarm_LowLevel"
+        address: 3003
+        type: "discrete_input"
+        value: 0
+
+# Process dynamics
+process:
+  update_rate: 1.0  # seconds
+  rules:
+    - condition: "Pump1_Status == 1"
+      actions:
+        - "Tank1_Level += 0.5 * Pump1_Speed / 100.0"
+        - "Flow_Rate = Pump1_Speed * 10"
+    - condition: "Pump2_Status == 1"
+      actions:
+        - "Tank2_Level += 0.5 * Pump2_Speed / 100.0"
+        - "Flow_Rate += Pump2_Speed * 10"
+    - condition: "Valve1_Position > 0"
+      actions:
+        - "Tank1_Level -= 0.3 * Valve1_Position / 100.0"
+    - condition: "Valve2_Position > 0"
+      actions:
+        - "Tank2_Level -= 0.3 * Valve2_Position / 100.0"
+    - condition: "Tank1_Level >= 90"
+      actions:
+        - "Alarm_HighLevel = 1"
+    - condition: "Tank1_Level < 90"
+      actions:
+        - "Alarm_HighLevel = 0"
+    - condition: "Tank1_Level <= 10"
+      actions:
+        - "Alarm_LowLevel = 1"
+    - condition: "Tank1_Level > 10"
+      actions:
+        - "Alarm_LowLevel = 0"
+    - condition: "True"  # Always execute
+      actions:
+        - "Water_Pressure = (Tank1_Level + Tank2_Level) / 2" 

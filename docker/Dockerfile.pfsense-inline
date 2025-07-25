@@ -1,0 +1,83 @@
+FROM ubuntu:22.04
+
+LABEL maintainer="ICS Security Team <ics-security@example.com>"
+LABEL description="Network security monitoring using pfSense-like functionality for ICS networks"
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Add Zeek repository
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    curl \
+    gnupg \
+    ca-certificates \
+    lsb-release \
+    && curl -fsSL https://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/Release.key | gpg --dearmor > /etc/apt/trusted.gpg.d/security_zeek.gpg \
+    && echo "deb http://download.opensuse.org/repositories/security:/zeek/xUbuntu_22.04/ /" > /etc/apt/sources.list.d/zeek.list
+
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    iptables \
+    iproute2 \
+    net-tools \
+    tcpdump \
+    suricata \
+    zeek \
+    ethtool \
+    sudo \
+    python3 \
+    python3-pip \
+    python3-dev \
+    git \
+    supervisor \
+    iputils-ping \
+    tshark \
+    libpcap-dev \
+    libnetfilter-queue-dev \
+    nginx \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Add Zeek to PATH
+ENV PATH="/opt/zeek/bin:${PATH}"
+
+# Install Python dependencies
+COPY requirements.txt /tmp/
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Create required directories
+RUN mkdir -p /app/ids /app/logs /app/config /app/zeek-scripts /app/suricata-rules /var/www/html
+
+# Create default configuration files if they don't exist
+RUN echo "# Default Suricata configuration" > /etc/suricata/suricata.yaml
+RUN echo "# Default Zeek configuration" > /opt/zeek/share/zeek/site/local.zeek
+
+# Setup supervisord to manage processes
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Setup nginx with default configuration
+RUN echo "server { listen 8443 ssl; root /var/www/html; index index.html; }" > /etc/nginx/sites-available/default
+
+# Enable IP forwarding for inline mode
+RUN echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+
+# Expose ports
+# Web interface
+EXPOSE 8443
+# Suricata REST API
+EXPOSE 8080
+# Zeek manager port
+EXPOSE 47761
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Default command
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"] 

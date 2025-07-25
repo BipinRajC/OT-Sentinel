@@ -1,0 +1,76 @@
+%YAML 1.1
+---
+# Basic Suricata configuration for ICS monitoring
+
+vars:
+  # Define address groups
+  address-groups:
+    HOME_NET: "[192.168.0.0/16,10.0.0.0/8,172.16.0.0/12]"
+    EXTERNAL_NET: "!$HOME_NET"
+    HTTP_SERVERS: "$HOME_NET"
+    SMTP_SERVERS: "$HOME_NET"
+    SQL_SERVERS: "$HOME_NET"
+    DNS_SERVERS: "$HOME_NET"
+    TELNET_SERVERS: "$HOME_NET"
+    ICS_SERVERS: "$HOME_NET"
+    MODBUS_SERVERS: "$HOME_NET"
+    DNP3_SERVERS: "$HOME_NET"
+
+  # Define port groups
+  port-groups:
+    HTTP_PORTS: "80,8080"
+    MODBUS_PORTS: "502"
+    DNP3_PORTS: "20000"
+    IEC104_PORTS: "2404"
+    ENIP_PORTS: "44818"
+    
+# Configure the default rule path
+default-rule-path: /app/suricata-rules
+
+# Define rules
+rule-files:
+  - "*.rules"
+  - "ics-rules/*.rules"
+  - "modbus-rules/*.rules"
+
+# Logging configuration
+logging:
+  default-log-level: notice
+  outputs:
+    - console:
+        enabled: true
+    - file:
+        enabled: true
+        filename: /app/logs/suricata.log
+        level: info
+    - syslog:
+        enabled: false
+
+# Alert output configuration
+outputs:
+  - fast:
+      enabled: true
+      filename: /app/logs/fast.log
+  - eve-log:
+      enabled: true
+      filetype: regular
+      filename: /app/logs/eve.json
+      types:
+        - alert
+        - http
+        - dns
+        - tls
+        - files
+        - flow
+
+# ICS-specific detection
+app-layer:
+  protocols:
+    modbus:
+      enabled: true
+      detection-ports:
+        dp: 502
+    dnp3:
+      enabled: true
+      detection-ports:
+        dp: 20000 

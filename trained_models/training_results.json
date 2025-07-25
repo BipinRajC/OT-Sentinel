@@ -1,0 +1,65 @@
+{
+  "gradient_boosting": {
+    "f1_score": 1.0,
+    "test_f1_score": 1.0,
+    "test_accuracy": 1.0,
+    "test_precision": 1.0,
+    "test_recall": 1.0
+  },
+  "ensemble": {
+    "f1_score": 1.0,
+    "test_f1_score": 1.0,
+    "test_accuracy": 1.0,
+    "test_precision": 1.0,
+    "test_recall": 1.0
+  },
+  "random_forest": {
+    "f1_score": 0.9993,
+    "test_f1_score": 0.9995,
+    "test_accuracy": 0.9995,
+    "test_precision": 0.9995,
+    "test_recall": 0.9995
+  },
+  "xgboost": {
+    "f1_score": 0.9987,
+    "test_f1_score": 0.9986,
+    "test_accuracy": 0.9986,
+    "test_precision": 0.9986,
+    "test_recall": 0.9986
+  },
+  "lightgbm": {
+    "f1_score": 0.9983,
+    "test_f1_score": 0.9982,
+    "test_accuracy": 0.9982,
+    "test_precision": 0.9982,
+    "test_recall": 0.9982
+  },
+  "catboost": {
+    "f1_score": 0.9967,
+    "test_f1_score": 0.9957,
+    "test_accuracy": 0.9957,
+    "test_precision": 0.9957,
+    "test_recall": 0.9957
+  },
+  "mlp": {
+    "f1_score": 0.8615,
+    "test_f1_score": 0.8656,
+    "test_accuracy": 0.8561,
+    "test_precision": 0.9095,
+    "test_recall": 0.8561
+  },
+  "hybrid_nn": {
+    "f1_score": 0.0948,
+    "test_f1_score": 0.0947,
+    "test_accuracy": 0.2053,
+    "test_precision": 0.093,
+    "test_recall": 0.2053
+  },
+  "svm": {
+    "f1_score": 0.0657,
+    "test_f1_score": 0.0659,
+    "test_accuracy": 0.1574,
+    "test_precision": 0.0746,
+    "test_recall": 0.1574
+  }
+}

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#00bcd4" />
+    <meta name="description" content="Advanced OT Security Monitoring System - Industrial Control Systems Security Dashboard with Real-time Threat Detection and Network Analysis" />
+    <meta name="keywords" content="OT Security, Industrial Security, SCADA, ICS, Cybersecurity, Network Monitoring, Threat Detection" />
+    <meta name="author" content="OT Security Team" />
+    
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="OT Security Monitor" />
+    <meta property="og:description" content="Advanced Industrial Control Systems Security Monitoring Dashboard" />
+    
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image" />
+    <meta property="twitter:title" content="OT Security Monitor" />
+    <meta property="twitter:description" content="Advanced Industrial Control Systems Security Monitoring Dashboard" />
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%2300bcd4'><path d='M12,1L3,5V11C3,16.55 6.84,21.74 12,23C17.16,21.74 21,16.55 21,11V5L12,1M12,7C13.4,7 14.8,8.6 14.8,10V11.5C15.4,11.5 16,12.1 16,12.7V16.7C16,17.4 15.4,18 14.7,18H9.2C8.6,18 8,17.4 8,16.8V12.8C8,12.1 8.6,11.5 9.2,11.5V10C9.2,8.6 10.6,7 12,7M12,8.2C11.2,8.2 10.5,8.7 10.5,10V11.5H13.6V10C13.6,8.7 12.8,8.2 12,8.2Z'/></svg>" />
+    
+    <!-- Preconnect to improve performance -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    
+    <!-- Inter Font for modern typography -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    
+    <!-- Material Icons -->
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+    
+    <title>OT Security Monitor - Industrial Control Systems Security Dashboard</title>
+    
+    <style>
+      /* Loading screen styles */
+      #loading-screen {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        z-index: 9999;
+        transition: opacity 0.5s ease;
+      }
+      
+      #loading-screen.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      
+      .loading-spinner {
+        width: 60px;
+        height: 60px;
+        border: 3px solid rgba(0, 188, 212, 0.3);
+        border-radius: 50%;
+        border-top-color: #00bcd4;
+        animation: spin 1s ease-in-out infinite;
+        margin-bottom: 20px;
+        filter: drop-shadow(0 0 10px #00bcd4);
+      }
+      
+      .loading-text {
+        color: #ffffff;
+        font-family: 'Inter', sans-serif;
+        font-size: 18px;
+        font-weight: 600;
+        letter-spacing: 1px;
+        text-align: center;
+        margin-bottom: 10px;
+      }
+      
+      .loading-subtitle {
+        color: #b0bec5;
+        font-family: 'Inter', sans-serif;
+        font-size: 14px;
+        font-weight: 400;
+        text-align: center;
+      }
+      
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      
+      /* Base styles for faster loading */
+      body {
+        margin: 0;
+        padding: 0;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+        background: #0a0e27;
+        color: #ffffff;
+        overflow-x: hidden;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+      
+      #root {
+        min-height: 100vh;
+      }
+      
+      /* Custom scrollbar */
+      ::-webkit-scrollbar {
+        width: 8px;
+      }
+      
+      ::-webkit-scrollbar-track {
+        background: #1a1f3a;
+        border-radius: 4px;
+      }
+      
+      ::-webkit-scrollbar-thumb {
+        background: linear-gradient(135deg, #00bcd4 0%, #0288d1 100%);
+        border-radius: 4px;
+      }
+      
+      ::-webkit-scrollbar-thumb:hover {
+        background: linear-gradient(135deg, #0288d1 0%, #01579b 100%);
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>
+      <div style="padding: 20px; text-align: center; background: #0a0e27; color: #ffffff; min-height: 100vh; display: flex; align-items: center; justify-content: center;">
+        <div>
+          <h1>JavaScript Required</h1>
+          <p>You need to enable JavaScript to run the OT Security Monitoring System.</p>
+          <p>Please enable JavaScript in your browser settings and reload the page.</p>
+        </div>
+      </div>
+    </noscript>
+    
+    <!-- Loading Screen -->
+    <div id="loading-screen">
+      <div class="loading-spinner"></div>
+      <div class="loading-text">OT Security Monitor</div>
+      <div class="loading-subtitle">Initializing Security Dashboard...</div>
+    </div>
+    
+    <div id="root"></div>
+    
+    <script>
+      // Hide loading screen once React app loads
+      window.addEventListener('load', function() {
+        setTimeout(function() {
+          const loadingScreen = document.getElementById('loading-screen');
+          if (loadingScreen) {
+            loadingScreen.classList.add('fade-out');
+            setTimeout(() => {
+              loadingScreen.style.display = 'none';
+            }, 500);
+          }
+        }, 1000); // Show loading screen for at least 1 second
+      });
+      
+      // Performance monitoring
+      window.addEventListener('DOMContentLoaded', function() {
+        const navigationStart = performance.timing.navigationStart;
+        const domContentLoaded = performance.timing.domContentLoaded;
+        const loadTime = domContentLoaded - navigationStart;
+        console.log('OT Security Dashboard load time:', loadTime + 'ms');
+      });
+      
+      // Service Worker registration for PWA capabilities
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function() {
+          // Register service worker for offline capabilities (if available)
+          // This can be implemented later for PWA features
+        });
+      }
+    </script>
+  </body>
+</html> 

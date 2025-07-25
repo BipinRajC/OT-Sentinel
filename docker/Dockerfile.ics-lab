@@ -1,0 +1,83 @@
+FROM ubuntu:22.04
+
+LABEL maintainer="ICS Security Team <ics-security@example.com>"
+LABEL description="ICS Security Lab Environment for simulation and testing"
+
+# Set environment variables
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONUNBUFFERED=1
+
+# Install basic utilities and dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    python3-dev \
+    build-essential \
+    git \
+    wget \
+    curl \
+    net-tools \
+    iputils-ping \
+    traceroute \
+    tcpdump \
+    wireshark \
+    tshark \
+    nmap \
+    openssh-server \
+    supervisor \
+    libpcap-dev \
+    libsctp-dev \
+    libssl-dev \
+    pkg-config \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt /tmp/
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt
+
+# Install pymodbus server
+RUN pip3 install --no-cache-dir pymodbus pymodbus[server]
+
+# Create working directories
+RUN mkdir -p /app/simulation /app/data /app/logs /app/config
+
+# Copy simulation files
+COPY simulation/ /app/simulation/
+
+# Copy configuration files
+COPY config/ /app/config/
+
+# Setup supervisord to manage processes
+COPY docker/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# Setup SSH for remote access
+RUN mkdir -p /var/run/sshd
+RUN echo 'root:password' | chpasswd
+RUN sed -i 's/#PermitRootLogin prohibit-password/PermitRootLogin yes/' /etc/ssh/sshd_config
+
+# Expose ports
+# Modbus TCP
+EXPOSE 502
+# Modbus UDP
+EXPOSE 502/udp 
+# SSH
+EXPOSE 22
+# Web interface
+EXPOSE 8080
+# Additional ICS protocol ports
+EXPOSE 44818 102 20000 1089-1091 2222 47808 1911 789 20547 5094 5007 9600 1962
+
+# Set work directory
+WORKDIR /app
+
+# Copy entrypoint script
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+# Set entrypoint
+ENTRYPOINT ["/entrypoint.sh"]
+
+# Default command
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/supervisord.conf"] 

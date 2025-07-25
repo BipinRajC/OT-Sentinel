@@ -1,0 +1,73 @@
+version: '3.8'
+
+services:
+  # Redis for real-time messaging
+  redis:
+    image: redis:7-alpine
+    container_name: ot-security-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ot-security-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  # Backend API Service with GPU support
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.gpu
+    container_name: ot-security-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+      - CUDA_VISIBLE_DEVICES=0
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    networks:
+      - ot-security-network
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./simple_api.py:/app/simple_api.py
+      - ./trained_models:/app/trained_models
+      - ./backend/services/realtime_simulation_service.py:/app/services/realtime_simulation_service.py
+      - ./backend/services/realtime_api.py:/app/services/realtime_api.py
+      - ./backend/api/main.py:/app/api/main.py
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ot-security-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - ot-security-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+
+networks:
+  ot-security-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local 

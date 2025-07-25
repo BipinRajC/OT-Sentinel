@@ -1,0 +1,70 @@
+FROM python:3.10-slim
+
+LABEL maintainer="ICS Security Team <ics-security@example.com>"
+LABEL description="Jupyter Lab environment for ICS security machine learning pipeline"
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install system dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    git \
+    wget \
+    curl \
+    graphviz \
+    libgraphviz-dev \
+    pkg-config \
+    nodejs \
+    npm \
+    libpcap-dev \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY ml-pipeline/requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r /tmp/requirements.txt && \
+    pip install --no-cache-dir \
+    jupyterlab \
+    jupyter-dash \
+    ipywidgets \
+    jupyter-server-proxy \
+    jupyterlab-git \
+    pandas-profiling \
+    pygraphviz \
+    pyarrow \
+    fastparquet \
+    graphviz \
+    pydot \
+    tf2onnx \
+    plotly
+
+# Note: Jupyter Lab extensions are deprecated and installed via pip above
+
+# Create working directory
+RUN mkdir -p /app/notebooks /app/data /app/models /app/ml-pipeline /app/results
+
+# Copy ML pipeline code
+COPY ml-pipeline/ /app/ml-pipeline/
+
+# Copy example notebooks
+COPY notebooks/ /app/notebooks/
+
+# Create a non-root user for Jupyter
+RUN useradd -m -s /bin/bash jupyter
+RUN chown -R jupyter:jupyter /app
+
+# Switch to the non-root user
+USER jupyter
+
+# Set work directory
+WORKDIR /app
+
+# Expose Jupyter Lab port
+EXPOSE 8888
+
+# Start Jupyter Lab
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=''", "--NotebookApp.password=''"] 

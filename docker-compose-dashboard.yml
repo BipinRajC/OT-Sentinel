@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  # Redis for real-time messaging
+  redis:
+    image: redis:7-alpine
+    container_name: ot-security-redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ot-security-network
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+
+  # Backend API Service
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: ot-security-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - REDIS_URL=redis://redis:6379
+      - API_HOST=0.0.0.0
+      - API_PORT=8000
+    networks:
+      - ot-security-network
+    depends_on:
+      - redis
+    restart: unless-stopped
+    volumes:
+      - ./simple_api.py:/app/simple_api.py
+
+  # Frontend Service
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: ot-security-frontend
+    ports:
+      - "3000:80"
+    networks:
+      - ot-security-network
+    depends_on:
+      - backend
+    restart: unless-stopped
+    environment:
+      - REACT_APP_API_URL=http://localhost:8000
+
+networks:
+  ot-security-network:
+    driver: bridge
+
+volumes:
+  redis_data:
+    driver: local

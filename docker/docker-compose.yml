@@ -1,0 +1,152 @@
+version: '3.8'
+
+services:
+  # ICS Simulation Environment
+  ics-lab:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ics-lab
+    container_name: ics-lab
+    ports:
+      - "502:502"         # MODBUS TCP
+      - "502:502/udp"     # MODBUS UDP
+      - "44818:44818"     # EtherNet/IP
+      - "47808:47808"     # BACnet
+      - "20000:20000"     # DNP3
+      - "102:102"         # IEC-104
+      - "8080:8080"       # Web interface
+    networks:
+      - ics-network
+      - monitor-network
+    volumes:
+      - ../simulation:/app/simulation
+      - ../data:/app/data
+      - ../config:/app/config
+    restart: unless-stopped
+
+  # Network Security Monitoring
+  pfsense-inline:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.pfsense-inline
+    container_name: pfsense-inline
+    ports:
+      - "8443:8443"       # Web interface
+      - "47761:47761"     # Zeek manager
+    networks:
+      - ics-network
+      - monitor-network
+    volumes:
+      - ../data:/app/data
+      - ../logs:/app/logs
+      - ../config:/app/config
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    restart: unless-stopped
+
+  # Machine Learning Environment
+  jupyter-ml:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.jupyter-ml
+    container_name: jupyter-ml
+    ports:
+      - "8888:8888"       # Jupyter Lab
+    networks:
+      - monitor-network
+    volumes:
+      - ../ml-pipeline:/app/ml-pipeline
+      - ../notebooks:/app/notebooks
+      - ../data:/app/data
+      - ../models:/app/models
+      - ../results:/app/results
+    restart: unless-stopped
+
+  # Database
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    environment:
+      POSTGRES_USER: icsuser
+      POSTGRES_PASSWORD: icspassword
+      POSTGRES_DB: ics_security
+    ports:
+      - "5432:5432"
+    networks:
+      - ics-network
+      - monitor-network
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    restart: unless-stopped
+
+  # Redis for caching and pub/sub
+  redis:
+    image: redis:6
+    container_name: redis
+    ports:
+      - "6379:6379"
+    networks:
+      - ics-network
+      - monitor-network
+    restart: unless-stopped
+
+  # Backend API
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: backend
+    depends_on:
+      - postgres
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://icsuser:icspassword@postgres:5432/ics_security
+      - REDIS_URL=redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../backend:/app/backend
+    networks:
+      - ics-network
+      - monitor-network
+    restart: unless-stopped
+
+  # Frontend
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+    container_name: frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ../frontend:/app/frontend
+      - /app/frontend/node_modules
+    depends_on:
+      - backend
+    networks:
+      - ics-network
+      - monitor-network
+    restart: unless-stopped
+
+  # Message Queue
+  rabbitmq:
+    image: rabbitmq:3-management
+    container_name: rabbitmq
+    ports:
+      - "5672:5672"   # AMQP port
+      - "15672:15672" # Management UI
+    networks:
+      - ics-network
+      - monitor-network
+    restart: unless-stopped
+
+networks:
+  ics-network:
+    driver: bridge
+  monitor-network:
+    driver: bridge
+
+volumes:
+  postgres-data: 
