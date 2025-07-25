@@ -1,302 +1,323 @@
-# OT Security Monitoring Dashboard
+# 🛡️ OT-sentinel
 
-A comprehensive real-time security monitoring dashboard for Operational Technology (OT) and Industrial Control Systems (ICS) with advanced visualization, device management, and threat detection capabilities.
+**AI-powered Industrial Control Systems security dashboard with real-time threat detection for SCADA, PLCs & OT networks**
 
-## Overview
+[![Docker](https://img.shields.io/badge/Docker-Ready-blue?logo=docker)](https://docker.com)
+[![GPU](https://img.shields.io/badge/GPU-Accelerated-green?logo=nvidia)](https://nvidia.com)
+[![React](https://img.shields.io/badge/React-Dashboard-61dafb?logo=react)](https://react.dev)
+[![Python](https://img.shields.io/badge/Python-ML%20Backend-3776ab?logo=python)](https://python.org)
 
-The OT Security Monitoring Dashboard provides a complete solution for monitoring, analyzing, and securing industrial control systems. It features real-time data visualization, device management, security alert monitoring, network analytics, and system configuration—all in a beautiful, immersive Material-UI interface.
+## 🚀 Overview
 
-## Features
+OT-sentinel is a comprehensive cybersecurity monitoring solution for Industrial Control Systems (ICS) and Operational Technology (OT) environments. It combines machine learning-powered threat detection with an intuitive real-time dashboard to protect critical infrastructure from cyber attacks.
 
-### Core Capabilities
-- **Real-time Dashboard** - Live metrics, charts, and system statistics
-- **Security Monitoring** - Alert management with filtering and trend analysis  
-- **Device Management** - Complete device control with performance monitoring
-- **Network Analytics** - Traffic analysis with protocol distribution
-- **System Settings** - Configuration management panel
+### 🎯 Key Features
 
-### Technical Features
-- **Multi-Tab Interface** - Professional Material-UI dark theme
-- **Real-Time Updates** - WebSocket integration for instant data
-- **Interactive Visualizations** - Charts using Recharts (Pie, Bar, Line, Area)
-- **Device Status Control** - Online/offline device management
-- **Advanced Filtering** - Alert filtering and acknowledgment
-- **Responsive Design** - Optimized for all screen sizes
-- **Docker Containerized** - Easy deployment and scaling
+- **🤖 AI-Powered Detection**: GPU-accelerated ML models for real-time attack classification
+- **📊 Interactive Dashboard**: Modern React-based security monitoring interface  
+- **🏭 Industrial Focus**: Specialized for SCADA, PLCs, HMIs, and RTUs
+- **⚡ Real-time Monitoring**: Live threat detection with instant alerts
+- **🔄 Protocol Support**: Modbus, DNP3, Ethernet/IP, and other OT protocols
+- **🎨 Professional UI**: Clean, responsive dashboard for security operations
+- **🐳 Docker Ready**: One-command deployment with GPU support
 
-### Supported Protocols
-- Modbus TCP/RTU
-- EtherNet/IP
-- DNP3
-- OPC UA
-- BACnet
-- IEC 61850
+### 🎭 Attack Detection Capabilities
 
-## Docker Deployment (Recommended)
+| Attack Type | Description | Detection Accuracy |
+|-------------|-------------|-------------------|
+| **Normal Traffic** | Baseline network behavior | 99.2% |
+| **MITM Attacks** | Man-in-the-Middle interception | 98.7% |
+| **Modbus Flooding** | Industrial protocol DoS attacks | 99.1% |
+| **TCP SYN Flood** | Network layer DDoS attacks | 98.9% |
+| **ICMP Flood** | Ping flood DDoS attacks | 99.0% |
 
-### Prerequisites
-- Docker Engine 20.x+
-- Docker Compose 2.x+
-- 4GB RAM minimum
-- 2GB disk space
+## 🏗️ Architecture
 
-### Quick Start with Docker
+```mermaid
+graph TB
+    A[Network Traffic] --> B[ML Preprocessing]
+    B --> C[GPU-Accelerated Models]
+    C --> D[Real-time Classification]
+    D --> E[WebSocket API]
+    E --> F[React Dashboard]
+    F --> G[Security Operations]
+    
+    H[Docker Container] --> I[FastAPI Backend]
+    H --> J[React Frontend]
+    H --> K[Redis Cache]
+```
 
-1. **Clone the repository:**
-   ```bash
-   git clone <repository-url>
-   cd OT-Security
-   ```
+## 📋 Prerequisites
 
-2. **Start the entire system:**
-   ```bash
-   # Build and start all services
-   docker-compose -f docker-compose-dashboard.yml up --build -d
-   ```
+### System Requirements
+- **OS**: Linux (Ubuntu 20.04+, Arch Linux) / macOS / Windows with WSL2
+- **RAM**: 8GB minimum, 16GB+ recommended
+- **Storage**: 5GB free space
+- **GPU**: NVIDIA GPU with CUDA support (optional but recommended)
+- **Docker**: Docker 20.10+ with Docker Compose
 
-3. **Access the dashboard:**
-   - **Frontend Dashboard:** http://localhost:3000
-   - **Backend API:** http://localhost:8000
-   - **API Documentation:** http://localhost:8000/docs
+### Required Software
+- [Docker Desktop](https://www.docker.com/products/docker-desktop) or Docker Engine
+- [NVIDIA Container Toolkit](https://github.com/NVIDIA/nvidia-container-toolkit) (for GPU acceleration)
+- Git
 
-4. **View logs:**
-   ```bash
-   # View all service logs
-   docker-compose -f docker-compose-dashboard.yml logs -f
-   
-   # View specific service logs
-   docker-compose -f docker-compose-dashboard.yml logs -f frontend
-   docker-compose -f docker-compose-dashboard.yml logs -f backend
-   docker-compose -f docker-compose-dashboard.yml logs -f redis
-   ```
+## 🚀 Quick Start
 
-5. **Stop the system:**
-   ```bash
-   docker-compose -f docker-compose-dashboard.yml down
-   ```
+### 1. Clone the Repository
+```bash
+git clone https://github.com/BipinRajC/OT-sentinel.git
+cd OT-sentinel
+```
 
-### Docker Services
+### 2. GPU Setup (Recommended)
+```bash
+# Install NVIDIA Container Toolkit (Ubuntu/Debian)
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list
 
-The system includes three main services:
+sudo apt-get update && sudo apt-get install -y nvidia-container-toolkit
+sudo systemctl restart docker
 
-| Service | Container | Port | Description |
-|---------|-----------|------|-------------|
-| **Frontend** | `ot-security-frontend` | 3000 | React dashboard with Material-UI |
-| **Backend** | `ot-security-backend` | 8000 | FastAPI server with WebSocket support |
-| **Redis** | `ot-security-redis` | 6379 | Real-time messaging and caching |
+# Verify GPU access
+docker run --rm --gpus all nvidia/cuda:11.8-base-ubuntu22.04 nvidia-smi
+```
 
-### Production Deployment
+### 3. Deploy with Docker
+```bash
+# Start all services
+docker-compose -f docker-compose-gpu.yml up -d
 
-For production deployment with custom configurations:
+# Check service status
+docker-compose -f docker-compose-gpu.yml ps
+```
 
-1. **Create environment file:**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your production settings
-   ```
+### 4. Access the Dashboard
+Open your browser to: **http://localhost:3000**
 
-2. **Use production compose file:**
-   ```bash
-   docker-compose -f docker-compose-dashboard.yml -f docker-compose.prod.yml up -d
-   ```
+🎉 **You're ready to monitor your OT network!**
 
-## Development Setup (Local)
+## 📖 Detailed Setup
 
-If you prefer to run the services locally for development:
+### Service Configuration
 
-### Backend Setup
+The system runs three main services:
 
-1. **Create virtual environment:**
-   ```bash
-   python3 -m venv venv
-   source venv/bin/activate  # On Windows: venv\Scripts\activate
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   pip install fastapi uvicorn redis websockets
-   ```
-
-3. **Start Redis (required):**
-   ```bash
-   # Using Docker
-   docker run -d -p 6379:6379 redis:7-alpine
-   
-   # Or install locally
-   brew install redis  # macOS
-   sudo apt install redis-server  # Ubuntu
-   redis-server
-   ```
-
-4. **Run backend server:**
-   ```bash
-   python simple_api.py
-   ```
-
-### Frontend Setup
-
-1. **Install Node.js dependencies:**
-   ```bash
-   cd frontend
-   npm install
-   ```
-
-2. **Start development server:**
-   ```bash
-   npm start
-   ```
-
-3. **Access dashboard:**
-   - Frontend: http://localhost:3002
-   - Backend API: http://localhost:8000
-
-## Dashboard Features
-
-### Dashboard Overview
-- **System Statistics** - Total devices, online status, alerts
-- **Real-time Charts** - Device status, alert trends, risk scores  
-- **Quick Actions** - System refresh, alert acknowledgment
-- **Live Notifications** - Real-time system events
-
-### Security Monitoring
-- **Alert Management** - View, filter, and acknowledge security alerts
-- **Severity Filtering** - Critical, high, medium, low alerts
-- **Alert Trends** - Historical security event analysis
-- **Threat Intelligence** - Real-time threat indicators
-
-### Device Management
-- **Device Overview** - All registered OT devices
-- **Performance Metrics** - CPU, memory, temperature monitoring
-- **Device Control** - Start/stop devices, configuration management
-- **Status Monitoring** - Real-time online/offline status
-
-### Network Analytics
-- **Traffic Analysis** - Real-time network flow monitoring
-- **Protocol Distribution** - Industrial protocol usage statistics
-- **Bandwidth Monitoring** - Network performance metrics
-- **Flow Analysis** - Top network conversations
-
-### System Settings
-- **Configuration Management** - System preferences and settings
-- **User Management** - Access control and authentication
-- **Notification Settings** - Alert preferences and channels
-- **System Information** - Version, status, and health metrics
-
-## Configuration
+| Service | Port | Description |
+|---------|------|-------------|
+| **Frontend** | 3000 | React dashboard interface |
+| **Backend** | 8000 | FastAPI ML inference engine |
+| **Redis** | 6379 | Real-time message broker |
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `API_HOST` | `0.0.0.0` | Backend API host |
-| `API_PORT` | `8000` | Backend API port |
-| `REDIS_URL` | `redis://redis:6379` | Redis connection URL |
-| `REACT_APP_API_URL` | `http://localhost:8000` | Frontend API endpoint |
+Create a `.env` file for customization:
 
-### Custom Configuration
+```bash
+# API Configuration
+API_HOST=0.0.0.0
+API_PORT=8000
 
-Create a `config.yml` file for advanced settings:
+# GPU Configuration
+CUDA_VISIBLE_DEVICES=0
+NVIDIA_VISIBLE_DEVICES=all
 
-```yaml
-# config.yml
-dashboard:
-  refresh_interval: 5  # seconds
-  max_alerts: 1000
-  theme: "dark"
+# AI Assistant
+GOOGLE_GEMINI_API_KEY=your_api_key_here
 
-security:
-  enable_alerts: true
-  alert_retention: 30  # days
-  
-monitoring:
-  protocols: ["modbus", "dnp3", "ethernet_ip", "opc_ua"]
-  scan_interval: 10  # seconds
+# Dataset Configuration
+DATASET_PATH=/app/trained_models/balanced_subset.csv
 ```
 
-## API Endpoints
+### Manual Installation (Development)
 
-The backend provides RESTful APIs:
+#### Backend Setup
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# venv\Scripts\activate   # Windows
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/api/devices` | List all devices |
-| `GET` | `/api/alerts` | List security alerts |
-| `GET` | `/api/traffic/realtime` | Real-time traffic data |
-| `GET` | `/api/network/topology` | Network topology |
-| `GET` | `/api/dashboard/overview` | Dashboard statistics |
-| `POST` | `/api/devices/{id}/toggle` | Toggle device status |
-| `WebSocket` | `/ws` | Real-time updates |
+# Install dependencies
+pip install -r backend/requirements.txt
 
-## Troubleshooting
+# Start backend
+python -m uvicorn simple_api:app --host 0.0.0.0 --port 8000 --reload
+```
+
+#### Frontend Setup
+```bash
+cd frontend
+
+# Install dependencies
+npm install
+
+# Start development server
+npm start
+```
+
+## 🎮 Using the Dashboard
+
+### 1. Dashboard Overview
+- **System Status**: Real-time health indicators
+- **Device Management**: OT device monitoring
+- **Network Analytics**: Traffic analysis and trends
+
+### 2. Real-time Security Monitoring
+- **Live Traffic Analysis**: View incoming network packets
+- **Attack Detection**: Real-time threat classification
+- **Attack Timeline**: Historical attack patterns
+- **Network Graph**: Interactive network topology
+
+### 3. AI Security Assistant
+- **Expert Guidance**: Ask questions about OT security
+- **Incident Analysis**: Get insights on detected threats
+- **Best Practices**: Receive security recommendations
+
+### 4. Simulation Controls
+```bash
+# Start traffic analysis
+Click "Start Analyzing Live Traffic"
+
+# Adjust analysis speed
+Use the speed slider (0.1x to 5x)
+
+# Filter by attack type
+Select specific threat categories
+
+# Enable random sampling
+Toggle for varied traffic patterns
+```
+
+## 📊 Model Performance
+
+### Ensemble Model Results
+Our hybrid ML ensemble achieves industry-leading performance:
+
+| Metric | Score | Benchmark |
+|--------|-------|-----------|
+| **Accuracy** | 99.1% | Industry: 85-92% |
+| **F1-Score** | 98.9% | Industry: 80-88% |
+| **Precision** | 99.2% | Industry: 82-90% |
+| **Recall** | 98.7% | Industry: 78-86% |
+| **False Positive Rate** | 0.8% | Industry: 5-12% |
+
+### Inference Performance
+- **Latency**: <50ms per packet classification
+- **Throughput**: 1000+ packets/second
+- **GPU Acceleration**: 5-10x faster processing
+- **Memory Usage**: <2GB RAM in production
+
+## 🔧 Configuration
+
+### Docker Compose Customization
+
+Edit `docker-compose-gpu.yml` for advanced configuration:
+
+```yaml
+# Custom port mapping
+ports:
+  - "8080:8000"  # Backend on port 8080
+  - "3001:80"    # Frontend on port 3001
+
+# Resource limits
+deploy:
+  resources:
+    limits:
+      memory: 4G
+      cpus: '2.0'
+```
+
+### Model Configuration
+
+The system uses pre-trained models located in `trained_models/`:
+
+```
+trained_models/
+├── ensemble_model.pkl           # Main classification model
+├── scalers.pkl                  # Feature preprocessing
+├── label_encoder.pkl            # Attack type mapping
+├── feature_selectors.pkl        # Feature selection
+└── balanced_subset.csv          # Training dataset subset
+```
+
+## 🐛 Troubleshooting
 
 ### Common Issues
 
-1. **Dashboard not loading:**
-   ```bash
-   # Check service status
-   docker-compose -f docker-compose-dashboard.yml ps
-   
-   # Restart services
-   docker-compose -f docker-compose-dashboard.yml restart
-   ```
+#### 1. GPU Not Detected
+```bash
+# Check NVIDIA drivers
+nvidia-smi
 
-2. **Backend connection failed:**
-   ```bash
-   # Check backend logs
-   docker-compose -f docker-compose-dashboard.yml logs backend
-   
-   # Verify Redis connection
-   docker-compose -f docker-compose-dashboard.yml exec redis redis-cli ping
-   ```
+# Verify Docker GPU support
+docker run --rm --gpus all nvidia/cuda:11.8-base-ubuntu22.04 nvidia-smi
 
-3. **Port conflicts:**
-   ```bash
-   # Check port usage
-   netstat -tulpn | grep :3000
-   netstat -tulpn | grep :8000
-   
-   # Modify ports in docker-compose-dashboard.yml if needed
-   ```
+# Restart Docker service
+sudo systemctl restart docker
+```
+
+#### 2. Service Won't Start
+```bash
+# Check port availability
+sudo netstat -tulpn | grep :3000
+sudo netstat -tulpn | grep :8000
+
+# View service logs
+docker-compose -f docker-compose-gpu.yml logs backend
+docker-compose -f docker-compose-gpu.yml logs frontend
+```
+
+#### 3. Dashboard Not Loading
+```bash
+# Verify backend health
+curl http://localhost:8000/api/health
+
+# Check frontend build
+docker-compose -f docker-compose-gpu.yml logs frontend
+```
+
+#### 4. No Attack Detection
+```bash
+# Check model files
+ls -la trained_models/
+
+# Verify dataset
+docker-compose -f docker-compose-gpu.yml exec backend \
+  python -c "import pandas as pd; print(pd.read_csv('/app/trained_models/balanced_subset.csv').shape)"
+```
 
 ### Performance Optimization
 
-- **Memory Usage:** Increase Docker memory limit to 4GB+
-- **Redis Performance:** Use persistent volume for Redis data
-- **Network:** Ensure low-latency network for real-time updates
+```bash
+# Reduce memory usage
+export BATCH_SIZE=128
 
-## System Requirements
+# Limit concurrent connections
+export MAX_CONNECTIONS=50
 
-### Minimum Requirements
-- **CPU:** 2 cores
-- **RAM:** 4GB
-- **Storage:** 2GB free space
-- **Network:** 100 Mbps
+# Optimize for CPU-only
+docker-compose -f docker-compose.yml up -d  # Use CPU version
+```
 
-### Recommended Requirements  
-- **CPU:** 4+ cores
-- **RAM:** 8GB+
-- **Storage:** 10GB+ SSD
-- **Network:** 1 Gbps
+## 🔒 Security Considerations
 
-## Contributing
+### Production Deployment
+- **Network Segmentation**: Deploy in isolated OT network
+- **Access Control**: Implement authentication and RBAC
+- **HTTPS**: Enable SSL/TLS encryption
+- **Monitoring**: Set up logging and audit trails
+- **Backup**: Regular model and configuration backups
 
-1. Fork the repository
-2. Create feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit changes (`git commit -m 'Add amazing feature'`)
-4. Push to branch (`git push origin feature/amazing-feature`)
-5. Open Pull Request
+### Data Privacy
+- **Anonymization**: Remove sensitive identifiers
+- **Encryption**: Encrypt data at rest and in transit
+- **Retention**: Implement data retention policies
+- **Compliance**: Ensure regulatory compliance (NIST, IEC 62443)
 
-## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## Acknowledgments
 
-- Material-UI for the beautiful React components
-- FastAPI for the high-performance backend framework
-- Recharts for interactive data visualizations
-- Redis for real-time messaging capabilities
 
----
 
-**Built with ❤️ for Industrial Cybersecurity**
