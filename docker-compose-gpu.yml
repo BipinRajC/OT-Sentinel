@@ -39,7 +39,6 @@ services:
       - ./trained_models:/app/trained_models
       - ./backend/services/realtime_simulation_service.py:/app/services/realtime_simulation_service.py
       - ./backend/services/realtime_api.py:/app/services/realtime_api.py
-      - ./backend/api/main.py:/app/api/main.py
     deploy:
       resources:
         reservations:
