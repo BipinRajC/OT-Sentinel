@@ -1,4 +1,4 @@
-# Use Ubuntu base image for GPU support
+# Use Ubuntu base image for CPU-only support
 FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
@@ -35,8 +35,6 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PYTHONPATH=/app \
-    CUDA_VISIBLE_DEVICES=0 \
-    NVIDIA_VISIBLE_DEVICES=all \
     GOOGLE_GEMINI_API_KEY=AIzaSyC-eF8ERBW2Qqa-rTxM5RECrEIrGk7HXkU \
     REDIS_HOST=redis \
     REDIS_PORT=6379 \
@@ -46,28 +44,14 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     MODBUS_UNIT_ID=1 \
     DATABASE_URL=postgresql://icsuser:icspassword@postgres:5432/ics_security
 
-# Create requirements file for essential ML packages
-RUN echo "torch>=2.0.0" > /tmp/ml_requirements.txt && \
-    echo "torchvision" >> /tmp/ml_requirements.txt && \
-    echo "torchaudio" >> /tmp/ml_requirements.txt && \
-    echo "tensorflow>=2.13.0" >> /tmp/ml_requirements.txt && \
-    echo "xgboost" >> /tmp/ml_requirements.txt && \
-    echo "lightgbm" >> /tmp/ml_requirements.txt && \
-    echo "scikit-learn" >> /tmp/ml_requirements.txt && \
-    echo "pandas" >> /tmp/ml_requirements.txt && \
-    echo "numpy" >> /tmp/ml_requirements.txt
+# Install PyTorch CPU version
+RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
 
-# Install PyTorch with CUDA support first
-RUN pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-
-# Install TensorFlow with GPU support
-RUN pip install tensorflow[and-cuda]>=2.13.0
+# Install TensorFlow CPU version
+RUN pip install tensorflow>=2.13.0
 
 # Install other ML libraries
 RUN pip install xgboost lightgbm scikit-learn pandas numpy
-
-# Install PostgreSQL adapter
-RUN pip install psycopg2-binary
 
 # Copy requirements and install remaining dependencies
 COPY backend/requirements.txt .
@@ -90,5 +74,4 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
 EXPOSE 8000
 
 # Run the full API with industrial process endpoints
-CMD ["python", "-m", "uvicorn", "simple_api:app", "--host", "0.0.0.0", "--port", "8000"]
- 
+CMD ["python", "-m", "uvicorn", "simple_api:app", "--host", "0.0.0.0", "--port", "8000"] 

@@ -1,128 +1,126 @@
 import { createTheme } from '@mui/material/styles';
 
-// Enhanced cybersecurity-themed color palette
+// Enhanced cybersecurity-themed color palette with darker backgrounds and brighter accents
 const cyberColors = {
-  // Primary cyber blue gradient
+  // Primary cyber blue gradient - more vibrant
   primary: {
-    main: '#00bcd4',
-    light: '#26c6da',
-    dark: '#0097a7',
-    50: '#e0f7fa',
-    100: '#b2ebf2',
-    200: '#80deea',
-    300: '#4dd0e1',
-    400: '#26c6da',
-    500: '#00bcd4',
-    600: '#00acc1',
-    700: '#0097a7',
-    800: '#00838f',
+    main: '#00ffff',
+    light: '#4dffff',
+    dark: '#00e5ff',
+    50: '#e0ffff',
+    100: '#b3ffff',
+    200: '#80ffff',
+    300: '#4dffff',
+    400: '#1affff',
+    500: '#00ffff',
+    600: '#00e5ff',
+    700: '#00bcd4',
+    800: '#0091ea',
     900: '#006064',
-    contrastText: '#ffffff',
+    contrastText: '#000000',
   },
   
-  // Secondary purple gradient
+  // Secondary purple gradient - more vibrant
   secondary: {
-    main: '#667eea',
-    light: '#9fa8ef',
-    dark: '#5a6fd8',
+    main: '#7c4dff',
+    light: '#b388ff',
+    dark: '#651fff',
     50: '#f3f4fe',
     100: '#e1e5fe',
     200: '#c5cae9',
     300: '#9fa8da',
     400: '#7986cb',
-    500: '#667eea',
-    600: '#5c6bc0',
-    700: '#512da8',
+    500: '#7c4dff',
+    600: '#651fff',
+    700: '#6200ea',
     800: '#4527a0',
     900: '#311b92',
     contrastText: '#ffffff',
   },
   
-  // Success gradient
+  // Success gradient - brighter green
   success: {
-    main: '#4caf50',
-    light: '#81c784',
-    dark: '#388e3c',
-    contrastText: '#ffffff',
+    main: '#00e676',
+    light: '#66ffa6',
+    dark: '#00c853',
+    contrastText: '#000000',
   },
   
-  // Warning gradient
+  // Warning gradient - brighter orange
   warning: {
-    main: '#ff9800',
-    light: '#ffb74d',
-    dark: '#f57c00',
-    contrastText: '#ffffff',
+    main: '#ffab00',
+    light: '#ffdd71',
+    dark: '#ff6f00',
+    contrastText: '#000000',
   },
   
-  // Error gradient
+  // Error gradient - brighter red
   error: {
-    main: '#f44336',
-    light: '#e57373',
-    dark: '#d32f2f',
+    main: '#ff1744',
+    light: '#ff6b7a',
+    dark: '#d50000',
     contrastText: '#ffffff',
   },
   
-  // Info gradient
+  // Info gradient - brighter blue
   info: {
-    main: '#2196f3',
-    light: '#64b5f6',
-    dark: '#1976d2',
-    contrastText: '#ffffff',
+    main: '#00e5ff',
+    light: '#62efff',
+    dark: '#00b2ff',
+    contrastText: '#000000',
   },
   
-  // Neon accent
+  // Neon accent - super bright
   neon: {
     main: '#39ff14',
     light: '#7cff5c',
     dark: '#2eb300',
   },
   
-  // Background colors
+  // Background colors - much darker
   background: {
-    default: '#0a0e27',
-    paper: 'rgba(26, 31, 58, 0.9)',
-    secondary: '#1a1f3a',
-    tertiary: '#2a2f5a',
-    glass: 'rgba(255, 255, 255, 0.05)',
+    default: '#020508',
+    paper: 'rgba(10, 15, 26, 0.95)',
+    secondary: '#0a0f1a',
+    tertiary: '#0f1322',
+    glass: 'rgba(0, 255, 255, 0.08)',
   },
   
-  // Text colors
+  // Text colors - higher contrast
   text: {
     primary: '#ffffff',
-    secondary: '#b0bec5',
-    disabled: '#78909c',
-    hint: '#607d8b',
+    secondary: '#e0e6ed',
+    disabled: '#b3bac1',
+    hint: '#9ca3af',
   },
   
-  // Divider colors
-  divider: 'rgba(255, 255, 255, 0.1)',
+  // Divider colors - more visible
+  divider: 'rgba(0, 255, 255, 0.25)',
   
-  // Border colors
+  // Border colors - more visible
   border: {
-    primary: '#3a4374',
+    primary: 'rgba(0, 255, 255, 0.3)',
     secondary: 'rgba(255, 255, 255, 0.1)',
   },
+  
+  // Enhanced gradients for backgrounds
+  gradients: {
+    primary: 'linear-gradient(135deg, rgba(0, 255, 255, 0.1) 0%, rgba(124, 77, 255, 0.1) 100%)',
+    secondary: 'linear-gradient(135deg, rgba(124, 77, 255, 0.1) 0%, rgba(0, 229, 255, 0.1) 100%)',
+    success: 'linear-gradient(135deg, rgba(0, 230, 118, 0.1) 0%, rgba(57, 255, 20, 0.1) 100%)',
+    warning: 'linear-gradient(135deg, rgba(255, 171, 0, 0.1) 0%, rgba(255, 111, 0, 0.1) 100%)',
+    error: 'linear-gradient(135deg, rgba(255, 23, 68, 0.1) 0%, rgba(213, 0, 0, 0.1) 100%)',
+    dark: 'linear-gradient(135deg, rgba(2, 5, 8, 0.95) 0%, rgba(10, 15, 26, 0.95) 100%)',
+  },
 };
 
-// Gradient definitions
-const gradients = {
-  primary: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-  secondary: 'linear-gradient(135deg, #00bcd4 0%, #0288d1 100%)',
-  danger: 'linear-gradient(135deg, #ff416c 0%, #ff4b2b 100%)',
-  success: 'linear-gradient(135deg, #56ab2f 0%, #a8e6cf 100%)',
-  warning: 'linear-gradient(135deg, #ff9a56 0%, #ffad56 100%)',
-  info: 'linear-gradient(135deg, #3b82f6 0%, #1e40af 100%)',
-  dark: 'linear-gradient(135deg, #0a0e27 0%, #1a1f3a 100%)',
-  glass: 'linear-gradient(135deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.05) 100%)',
-};
-
-// Shadow definitions
+// Shadow definitions - enhanced for darker theme
 const shadows = {
-  sm: '0 2px 8px rgba(0, 0, 0, 0.1)',
-  md: '0 4px 16px rgba(0, 0, 0, 0.2)',
-  lg: '0 8px 32px rgba(0, 0, 0, 0.3)',
-  glow: '0 0 20px rgba(0, 188, 212, 0.3)',
-  glowHover: '0 0 30px rgba(0, 188, 212, 0.5)',
+  sm: '0 2px 8px rgba(0, 0, 0, 0.3)',
+  md: '0 4px 16px rgba(0, 0, 0, 0.4)',
+  lg: '0 8px 32px rgba(0, 0, 0, 0.6)',
+  glow: '0 0 20px rgba(0, 255, 255, 0.4)',
+  glowHover: '0 0 30px rgba(0, 255, 255, 0.6)',
 };
 
 const getTheme = (mode = 'dark') => {
@@ -139,7 +137,7 @@ const getTheme = (mode = 'dark') => {
       text: cyberColors.text,
       divider: cyberColors.divider,
       // Custom colors
-      gradients,
+      gradients: cyberColors.gradients,
       shadows,
       cyber: cyberColors,
     },
@@ -171,9 +169,9 @@ const getTheme = (mode = 'dark') => {
       ].join(','),
       
       h1: {
-        fontSize: '2.5rem',
+        fontSize: '3rem', // Increased from 2.5rem
         fontWeight: 700,
-        background: gradients.secondary,
+        background: cyberColors.gradients.secondary,
         backgroundClip: 'text',
         WebkitBackgroundClip: 'text',
         WebkitTextFillColor: 'transparent',
@@ -181,61 +179,79 @@ const getTheme = (mode = 'dark') => {
       },
       
       h2: {
-        fontSize: '2rem',
+        fontSize: '2.25rem', // Increased from 2rem
         fontWeight: 600,
         color: cyberColors.text.primary,
         lineHeight: 1.3,
       },
       
       h3: {
-        fontSize: '1.75rem',
+        fontSize: '2rem', // Increased from 1.75rem
         fontWeight: 600,
         color: cyberColors.text.primary,
         lineHeight: 1.3,
       },
       
       h4: {
-        fontSize: '1.5rem',
+        fontSize: '1.75rem', // Increased from 1.5rem
         fontWeight: 600,
         color: cyberColors.text.primary,
         lineHeight: 1.4,
       },
       
       h5: {
-        fontSize: '1.25rem',
+        fontSize: '1.5rem', // Increased from 1.25rem
         fontWeight: 600,
         color: cyberColors.text.primary,
         lineHeight: 1.4,
       },
       
       h6: {
-        fontSize: '1rem',
+        fontSize: '1.25rem', // Increased from 1rem
         fontWeight: 600,
         color: cyberColors.text.primary,
         lineHeight: 1.4,
       },
       
       body1: {
-        fontSize: '1rem',
+        fontSize: '1.125rem', // Increased from 1rem
         lineHeight: 1.6,
         color: cyberColors.text.primary,
+        fontWeight: 400,
       },
       
       body2: {
-        fontSize: '0.875rem',
+        fontSize: '1rem', // Increased from 0.875rem
         lineHeight: 1.6,
         color: cyberColors.text.secondary,
+        fontWeight: 400,
       },
       
       button: {
         textTransform: 'none',
         fontWeight: 600,
-        fontSize: '0.875rem',
+        fontSize: '1rem', // Increased from 0.875rem
+        letterSpacing: '0.02em',
       },
       
       caption: {
-        fontSize: '0.75rem',
+        fontSize: '0.875rem', // Increased from 0.75rem
         color: cyberColors.text.secondary,
+        lineHeight: 1.5,
+      },
+      
+      subtitle1: {
+        fontSize: '1.125rem',
+        fontWeight: 500,
+        color: cyberColors.text.primary,
+        lineHeight: 1.5,
+      },
+      
+      subtitle2: {
+        fontSize: '1rem',
+        fontWeight: 500,
+        color: cyberColors.text.secondary,
+        lineHeight: 1.5,
       },
     },
     
@@ -253,7 +269,7 @@ const getTheme = (mode = 'dark') => {
               borderRadius: 4,
             },
             '&::-webkit-scrollbar-thumb': {
-              background: gradients.secondary,
+              background: cyberColors.gradients.secondary,
               borderRadius: 4,
               '&:hover': {
                 background: 'linear-gradient(135deg, #0288d1 0%, #01579b 100%)',
@@ -289,19 +305,19 @@ const getTheme = (mode = 'dark') => {
             },
           },
           containedPrimary: {
-            background: gradients.secondary,
+            background: cyberColors.gradients.secondary,
             color: '#ffffff',
             '&:hover': {
-              background: gradients.secondary,
+              background: cyberColors.gradients.secondary,
               transform: 'translateY(-2px)',
               boxShadow: shadows.glowHover,
             },
           },
           containedSecondary: {
-            background: gradients.primary,
+            background: cyberColors.gradients.primary,
             color: '#ffffff',
             '&:hover': {
-              background: gradients.primary,
+              background: cyberColors.gradients.primary,
               transform: 'translateY(-2px)',
               boxShadow: shadows.glow,
             },
@@ -375,7 +391,7 @@ const getTheme = (mode = 'dark') => {
       MuiAppBar: {
         styleOverrides: {
           root: {
-            background: gradients.dark,
+            background: cyberColors.gradients.dark,
             backdropFilter: 'blur(20px)',
             border: `1px solid ${cyberColors.border.secondary}`,
             boxShadow: shadows.md,
@@ -407,7 +423,7 @@ const getTheme = (mode = 'dark') => {
       MuiTabs: {
         styleOverrides: {
           indicator: {
-            background: gradients.secondary,
+            background: cyberColors.gradients.secondary,
             height: 3,
             borderRadius: '3px 3px 0 0',
             boxShadow: shadows.glow,
@@ -426,7 +442,7 @@ const getTheme = (mode = 'dark') => {
             letterSpacing: '0.5px',
           },
           filled: {
-            background: gradients.secondary,
+            background: cyberColors.gradients.secondary,
             color: '#ffffff',
             boxShadow: shadows.glow,
           },
@@ -570,7 +586,7 @@ const getTheme = (mode = 'dark') => {
             backgroundColor: cyberColors.background.secondary,
           },
           bar: {
-            background: gradients.secondary,
+            background: cyberColors.gradients.secondary,
             borderRadius: 4,
           },
         },
@@ -602,4 +618,6 @@ const getTheme = (mode = 'dark') => {
   });
 };
 
+// Export both named and default for flexibility
+export { getTheme };
 export default getTheme; 

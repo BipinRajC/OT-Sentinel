@@ -33,10 +33,10 @@ import {
 import { styled } from '@mui/material/styles';
 
 const StyledCard = styled(Card)(({ theme }) => ({
-  background: 'linear-gradient(145deg, #1e2449 0%, #2a2f5a 100%)',
-  border: '1px solid #3a4374',
+  background: 'linear-gradient(145deg, #0f1322 0%, #1a2332 100%)',
+  border: '1px solid #00ffff',
   borderRadius: '16px',
-  boxShadow: '0 12px 48px rgba(0, 0, 0, 0.4)',
+  boxShadow: '0 12px 48px rgba(0, 0, 0, 0.6)',
   height: '100%',
 }));
 
@@ -44,18 +44,18 @@ const ChatContainer = styled(Box)(({ theme }) => ({
   height: '500px',
   overflowY: 'auto',
   padding: theme.spacing(2),
-  background: 'rgba(10, 14, 39, 0.3)',
+  background: 'rgba(2, 5, 8, 0.5)',
   borderRadius: '12px',
-  border: '1px solid #3a4374',
+  border: '1px solid #1a2332',
   '&::-webkit-scrollbar': {
     width: '8px',
   },
   '&::-webkit-scrollbar-track': {
-    background: 'rgba(255, 255, 255, 0.1)',
+    background: 'rgba(0, 255, 255, 0.1)',
     borderRadius: '4px',
   },
   '&::-webkit-scrollbar-thumb': {
-    background: 'linear-gradient(145deg, #00bcd4, #0288d1)',
+    background: 'linear-gradient(145deg, #00ffff, #00e5ff)',
     borderRadius: '4px',
   },
 }));
@@ -66,12 +66,63 @@ const MessageBubble = styled(Paper)(({ theme, isUser }) => ({
   maxWidth: '80%',
   alignSelf: isUser ? 'flex-end' : 'flex-start',
   background: isUser
-    ? 'linear-gradient(145deg, #00bcd4, #0288d1)'
-    : 'linear-gradient(145deg, #2a2f5a, #3a4374)',
-  color: theme.palette.text.primary,
+    ? 'linear-gradient(145deg, #00ffff, #00e5ff)'
+    : 'linear-gradient(145deg, #0f1322, #1a2332)',
+  color: isUser ? '#000000' : theme.palette.text.primary,
   borderRadius: isUser ? '20px 20px 6px 20px' : '20px 20px 20px 6px',
-  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.3)',
+  boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
 }));
+
+// Function to process AI response text - remove markdown and format nicely
+const processAIResponse = (text) => {
+  if (!text) return '';
+  
+  let processed = text
+    // Remove markdown headers
+    .replace(/#{1,6}\s*/g, '')
+    // Remove markdown bold/italic
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/__(.*?)__/g, '$1')
+    .replace(/_(.*?)_/g, '$1')
+    // Remove markdown code blocks
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`(.*?)`/g, '$1')
+    // Convert markdown lists to simple format
+    .replace(/^[\s]*[-\*\+]\s+(.+)$/gm, '• $1')
+    .replace(/^[\s]*\d+\.\s+(.+)$/gm, '• $1')
+    // Remove excessive line breaks
+    .replace(/\n{3,}/g, '\n\n')
+    // Clean up spaces
+    .replace(/[ \t]+/g, ' ')
+    .trim();
+
+  // Split into paragraphs and bullet points
+  const lines = processed.split('\n').filter(line => line.trim());
+  const result = [];
+  let currentParagraph = [];
+  
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith('•')) {
+      // If we have accumulated paragraph text, add it first
+      if (currentParagraph.length > 0) {
+        result.push(currentParagraph.join(' '));
+        currentParagraph = [];
+      }
+      result.push(trimmed);
+    } else if (trimmed) {
+      currentParagraph.push(trimmed);
+    }
+  }
+  
+  // Add any remaining paragraph
+  if (currentParagraph.length > 0) {
+    result.push(currentParagraph.join(' '));
+  }
+  
+  return result.join('\n\n');
+};
 
 const predefinedQuestions = [
   {
@@ -345,53 +396,13 @@ function AIAssistant() {
                       )}
                       
                       <MessageBubble isUser={message.isUser} elevation={3}>
-                        {message.isUser ? (
                         <Typography variant="body2" sx={{ 
-                          lineHeight: 1.5,
-                          whiteSpace: 'pre-wrap'
+                          lineHeight: 1.6,
+                          whiteSpace: 'pre-line',
+                          wordBreak: 'break-word'
                         }}>
-                          {message.text}
+                          {message.isUser ? message.text : processAIResponse(message.text)}
                         </Typography>
-                        ) : (
-                          <Box 
-                            sx={{ 
-                              lineHeight: 1.5,
-                              '& h3': { 
-                                color: '#00bcd4', 
-                                fontSize: '1.1rem', 
-                                fontWeight: 600, 
-                                margin: '12px 0 8px 0' 
-                              },
-                              '& strong': { 
-                                color: '#0288d1', 
-                                fontWeight: 600 
-                              },
-                              '& ul': { 
-                                margin: '8px 0', 
-                                paddingLeft: '20px' 
-                              },
-                              '& ol': { 
-                                margin: '8px 0', 
-                                paddingLeft: '20px' 
-                              },
-                              '& li': { 
-                                marginBottom: '4px' 
-                              },
-                              '& code': { 
-                                backgroundColor: 'rgba(0, 188, 212, 0.1)', 
-                                padding: '2px 6px', 
-                                borderRadius: '4px',
-                                fontFamily: 'monospace',
-                                fontSize: '0.9em'
-                              },
-                              '& br': { 
-                                display: 'block', 
-                                margin: '8px 0' 
-                              }
-                            }}
-                            dangerouslySetInnerHTML={{ __html: message.text }}
-                          />
-                        )}
                         
                         <Box sx={{ 
                           display: 'flex', 

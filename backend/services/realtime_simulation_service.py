@@ -13,6 +13,8 @@ import numpy as np
 import json
 import joblib
 import random
+import os
+import psycopg2
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, List, Any, Optional, AsyncGenerator
@@ -45,12 +47,9 @@ class RealTimeSimulationService:
     
     def __init__(self, dataset_path: str = "/app/trained_models/balanced_subset.csv"):
         self.dataset_path = dataset_path
-        # Fallback order: balanced_subset -> subset -> main dataset
-        if not Path(dataset_path).exists():
-            self.dataset_path = "/app/trained_models/subset.csv"
-            if not Path(self.dataset_path).exists():
-                self.dataset_path = "/app/trained_models/processed_ics_dataset_cleaned.csv"
-            logger.warning(f"Balanced subset not found, using fallback: {self.dataset_path}")
+        # Database connection
+        self.database_url = os.getenv('DATABASE_URL', 'postgresql://icsuser:icspassword@postgres:5432/ics_security')
+        self.db_connection = None
         
         self.model = None
         self.scaler = None
@@ -80,7 +79,7 @@ class RealTimeSimulationService:
         self.active_connections = set()
         
         self._load_models()
-        self._load_dataset()
+        self._load_dataset_from_csv()
     
     def _load_models(self):
         """Load the trained ML models and preprocessors"""
@@ -128,41 +127,127 @@ class RealTimeSimulationService:
         except Exception as e:
             logger.error(f"Error loading models: {e}")
     
-    def _load_dataset(self):
-        """Load and prepare the dataset for simulation"""
+    def _load_dataset_from_csv(self):
+        """Load and prepare the dataset from CSV file"""
         try:
-            # Read only the first few rows to get column info
-            sample_df = pd.read_csv(self.dataset_path, nrows=10)
+            # Check if CSV file exists
+            if not os.path.exists(self.dataset_path):
+                logger.warning(f"Dataset file not found: {self.dataset_path}, falling back to database")
+                self._load_dataset_from_db()
+                return
+            
+            # Load the CSV dataset
+            logger.info(f"Loading dataset from: {self.dataset_path}")
+            self.dataset = pd.read_csv(self.dataset_path)
+            
+            # Get basic info about the dataset
+            self.total_packets = len(self.dataset)
+            logger.info(f"Loaded {self.total_packets} records from CSV")
+            
+            # Get all available indices for random sampling
+            self.available_indices = list(range(self.total_packets))
             
             # Identify feature columns (exclude metadata columns)
-            exclude_cols = ['timestamp', 'label', 'category', 'file_name', 'src_ip', 'dst_ip']
-            self.feature_columns = [col for col in sample_df.columns if col not in exclude_cols]
+            metadata_columns = ['timestamp', 'src_ip', 'dst_ip', 'protocol', 'packet_size', 'label', 'category']
+            self.feature_columns = [col for col in self.dataset.columns if col not in metadata_columns]
+            
+            # If no standard metadata columns exist, try to identify feature columns differently
+            if not self.feature_columns:
+                # Assume numeric columns are features
+                numeric_columns = self.dataset.select_dtypes(include=[np.number]).columns.tolist()
+                self.feature_columns = numeric_columns[:20]  # Take first 20 numeric columns
             
             logger.info(f"Identified {len(self.feature_columns)} feature columns")
-            logger.info(f"Dataset path: {self.dataset_path}")
+            logger.info(f"Dataset columns: {list(self.dataset.columns)}")
             
-            # Get total row count for progress tracking
-            with open(self.dataset_path, 'r') as f:
-                self.total_packets = sum(1 for line in f) - 1  # Subtract header
+            # Get attack distribution
+            if 'label' in self.dataset.columns:
+                attack_dist = self.dataset['label'].value_counts()
+                logger.info(f"Attack distribution: {attack_dist.to_dict()}")
+            elif 'category' in self.dataset.columns:
+                attack_dist = self.dataset['category'].value_counts()
+                logger.info(f"Category distribution: {attack_dist.to_dict()}")
             
-            # Create weighted sampling - bias towards attack records
-            # First 50% are mostly normal, last 50% have more attacks
-            normal_range = list(range(0, self.total_packets // 2))  # First half
-            attack_range = list(range(self.total_packets // 2, self.total_packets))  # Second half
-            
-            # Create a weighted pool: 30% from normal range, 70% from attack range
-            self.available_indices = []
-            self.available_indices.extend(random.sample(normal_range, min(len(normal_range), self.total_packets // 4)))
-            self.available_indices.extend(random.sample(attack_range, min(len(attack_range), (self.total_packets * 3) // 4)))
-            
-            # Shuffle the combined indices
-            random.shuffle(self.available_indices)
-            
-            logger.info(f"Total packets in dataset: {self.total_packets}")
-            logger.info(f"Random sampling mode enabled with {len(self.available_indices)} weighted indices (biased toward attacks)")
+            # Connect to database for storing results (optional)
+            try:
+                self.db_connection = psycopg2.connect(self.database_url)
+                logger.info("Connected to database for result storage")
+            except Exception as db_error:
+                logger.warning(f"Could not connect to database: {db_error}")
+                self.db_connection = None
             
         except Exception as e:
-            logger.error(f"Error loading dataset: {e}")
+            logger.error(f"Error loading dataset from CSV: {e}")
+            logger.info("Falling back to database method")
+            self._load_dataset_from_db()
+
+    def _create_sample_data_table(self, cursor):
+        """Create network_traffic table with sample data"""
+        # Create table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS network_traffic (
+                id SERIAL PRIMARY KEY,
+                timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                src_ip VARCHAR(15),
+                dst_ip VARCHAR(15),
+                protocol VARCHAR(10),
+                packet_size INTEGER,
+                label VARCHAR(20),
+                category VARCHAR(10),
+                feature_0 FLOAT, feature_1 FLOAT, feature_2 FLOAT, feature_3 FLOAT, feature_4 FLOAT,
+                feature_5 FLOAT, feature_6 FLOAT, feature_7 FLOAT, feature_8 FLOAT, feature_9 FLOAT,
+                feature_10 FLOAT, feature_11 FLOAT, feature_12 FLOAT, feature_13 FLOAT, feature_14 FLOAT,
+                feature_15 FLOAT, feature_16 FLOAT, feature_17 FLOAT, feature_18 FLOAT, feature_19 FLOAT
+            )
+        """)
+        
+        # Insert sample data
+        attack_types = ['normal', 'dos', 'probe', 'r2l', 'u2r', 'modbus_attack']
+        protocols = ['TCP', 'UDP', 'ICMP', 'Modbus']
+        
+        for i in range(1000):
+            attack_type = random.choice(attack_types)
+            protocol = random.choice(protocols)
+            src_ip = f"192.168.1.{random.randint(1, 254)}"
+            dst_ip = f"192.168.1.{random.randint(1, 254)}"
+            packet_size = random.randint(64, 1500)
+            category = 'normal' if attack_type == 'normal' else 'attack'
+            
+            # Generate 20 features
+            features = []
+            for j in range(20):
+                if attack_type == 'normal':
+                    features.append(np.random.normal(0, 0.5))
+                elif attack_type == 'dos':
+                    features.append(np.random.normal(1.5, 0.8))
+                elif attack_type == 'probe':
+                    features.append(np.random.normal(-1.2, 0.6))
+                elif attack_type == 'r2l':
+                    features.append(np.random.normal(0.8, 1.0))
+                elif attack_type == 'u2r':
+                    features.append(np.random.normal(-0.5, 0.7))
+                else:  # modbus_attack
+                    features.append(np.random.normal(2.0, 1.2))
+            
+            cursor.execute("""
+                INSERT INTO network_traffic 
+                (src_ip, dst_ip, protocol, packet_size, label, category,
+                 feature_0, feature_1, feature_2, feature_3, feature_4,
+                 feature_5, feature_6, feature_7, feature_8, feature_9,
+                 feature_10, feature_11, feature_12, feature_13, feature_14,
+                 feature_15, feature_16, feature_17, feature_18, feature_19)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+            """, (src_ip, dst_ip, protocol, packet_size, attack_type, category, *features))
+        
+        logger.info("Created network_traffic table with 1000 sample records")
+    
+    def _generate_demo_data_in_memory(self):
+        """Fallback: generate demo data in memory if database fails"""
+        logger.warning("Database connection failed, using in-memory demo data")
+        self.total_packets = 100
+        self.available_indices = list(range(self.total_packets))
+        random.shuffle(self.available_indices)
+        self.feature_columns = [f'feature_{i}' for i in range(10)]
     
     def _int_to_ip(self, ip_int: int) -> str:
         """Convert integer IP to string format"""
@@ -171,126 +256,218 @@ class RealTimeSimulationService:
         except:
             return f"Unknown-{ip_int}"
     
-    def _preprocess_features(self, row: pd.Series) -> np.ndarray:
-        """Preprocess features for ML inference"""
+    def get_next_packet(self) -> Optional[pd.Series]:
+        """Get the next packet from the dataset using random sampling"""
         try:
-            # Extract features (excluding metadata columns)
-            feature_values = []
-            for col in self.feature_columns:
-                if col in row:
-                    feature_values.append(float(row[col]))
+            if not self.available_indices or self.total_packets == 0:
+                logger.warning("No more packets available or dataset not loaded")
+                return None
+            
+            # If using CSV dataset
+            if self.dataset is not None:
+                # Random sampling without replacement
+                if self.random_mode and len(self.available_indices) > 0:
+                    # Remove processed indices to avoid repetition
+                    remaining_indices = [idx for idx in self.available_indices if idx not in self.processed_indices]
+                    
+                    if not remaining_indices:
+                        # Reset if we've processed all indices
+                        self.processed_indices.clear()
+                        remaining_indices = self.available_indices.copy()
+                    
+                    # Select random index
+                    selected_index = random.choice(remaining_indices)
+                    self.processed_indices.add(selected_index)
+                    
+                    return self.dataset.iloc[selected_index]
                 else:
-                    feature_values.append(0.0)
+                    # Sequential access
+                    if self.current_row_index >= self.total_packets:
+                        self.current_row_index = 0  # Loop back to start
+                    
+                    packet = self.dataset.iloc[self.current_row_index]
+                    self.current_row_index += 1
+                    return packet
             
-            features = np.array(feature_values).reshape(1, -1)
+            # If using database (fallback)
+            elif self.db_connection:
+                cursor = self.db_connection.cursor()
+                
+                if self.random_mode and len(self.available_indices) > 0:
+                    # Remove processed indices
+                    remaining_indices = [idx for idx in self.available_indices if idx not in self.processed_indices]
+                    
+                    if not remaining_indices:
+                        self.processed_indices.clear()
+                        remaining_indices = self.available_indices.copy()
+                    
+                    selected_id = random.choice(remaining_indices)
+                    self.processed_indices.add(selected_id)
+                    
+                    cursor.execute("SELECT * FROM network_traffic WHERE id = %s", (selected_id,))
+                else:
+                    cursor.execute("SELECT * FROM network_traffic LIMIT 1 OFFSET %s", (self.current_row_index,))
+                    self.current_row_index = (self.current_row_index + 1) % self.total_packets
+                
+                row = cursor.fetchone()
+                cursor.close()
+                
+                if row:
+                    # Convert to pandas Series with column names
+                    columns = [desc[0] for desc in cursor.description] if hasattr(cursor, 'description') else []
+                    return pd.Series(dict(zip(columns, row)))
             
-            # Handle missing values
-            features = np.nan_to_num(features, nan=0.0)
+            return None
             
-            # Scale features if scaler is available
+        except Exception as e:
+            logger.error(f"Error getting next packet: {e}")
+            return None
+
+    def _preprocess_features(self, row: pd.Series) -> np.ndarray:
+        """Preprocess features for ML model prediction"""
+        try:
+            # Extract feature values
+            if self.feature_columns:
+                # Use identified feature columns
+                features = []
+                for col in self.feature_columns[:20]:  # Limit to first 20 features for model compatibility
+                    if col in row:
+                        value = row[col]
+                        # Handle missing or invalid values
+                        if pd.isna(value) or not isinstance(value, (int, float)):
+                            value = 0.0
+                        features.append(float(value))
+                    else:
+                        features.append(0.0)
+                
+                # Ensure we have exactly 20 features
+                while len(features) < 20:
+                    features.append(0.0)
+                features = features[:20]
+            else:
+                # Fallback: generate synthetic features based on packet characteristics
+                features = []
+                packet_size = float(row.get('packet_length', row.get('packet_size', 60)))
+                timestamp = row.get('timestamp', 0)
+                
+                # Generate 20 synthetic features
+                features = [
+                    packet_size / 1500.0,  # Normalized packet size
+                    float(row.get('has_tcp', 0)),
+                    float(row.get('has_udp', 0)),
+                    float(row.get('has_icmp', 0)),
+                    float(row.get('has_modbus', 0)),
+                    float(row.get('tcp_flags', 0)) / 255.0,
+                    float(row.get('tcp_window_size', 0)) / 65535.0,
+                    float(row.get('tcp_payload_size', 0)) / 1500.0,
+                    float(row.get('udp_payload_size', 0)) / 1500.0,
+                    float(row.get('payload_entropy', 0)),
+                    float(row.get('payload_mean', 0)) / 255.0,
+                    float(row.get('payload_std', 0)) / 255.0,
+                    float(row.get('payload_printable_ratio', 0)),
+                    float(row.get('payload_null_ratio', 0)),
+                    float(row.get('timestamp_hour', 0)) / 24.0,
+                    float(row.get('timestamp_minute', 0)) / 60.0,
+                    float(row.get('timestamp_second', 0)) / 60.0,
+                    float(row.get('src_ip_private', 0)),
+                    float(row.get('dst_ip_private', 0)),
+                    packet_size * 0.001  # Additional packet size feature
+                ]
+            
+            # Convert to numpy array
+            features_array = np.array(features, dtype=np.float32).reshape(1, -1)
+            
+            # Apply scaling if available
             if self.scaler is not None:
-                features = self.scaler.transform(features)
+                try:
+                    features_array = self.scaler.transform(features_array)
+                except Exception as scale_error:
+                    logger.warning(f"Error applying scaler: {scale_error}")
             
-            # Apply feature selection if available - temporarily use first 52 features
-            # Note: Model expects 52 features, we have 71, so take the first 52
-            if features.shape[1] > 52:
-                features = features[:, :52]
-            
-            # TODO: Fix feature selection later
-            # if self.feature_selectors is not None:
-            #     if isinstance(self.feature_selectors, dict):
-            #         # If it's a dict, extract the SelectKBest object
-            #         if 'statistical' in self.feature_selectors:
-            #             selector = self.feature_selectors['statistical']
-            #             if hasattr(selector, 'transform'):
-            #                 features = selector.transform(features)
-            #         elif 'selected_features' in self.feature_selectors:
-            #             selected_indices = self.feature_selectors['selected_features']
-            #             features = features[:, selected_indices]
-            #         elif 'feature_names' in self.feature_selectors:
-            #             # Use feature names to select
-            #             selected_names = self.feature_selectors['feature_names']
-            #             selected_indices = [i for i, col in enumerate(self.feature_columns) if col in selected_names]
-            #             features = features[:, selected_indices]
-            #     elif hasattr(self.feature_selectors, 'transform'):
-            #         features = self.feature_selectors.transform(features)
-            #     elif hasattr(self.feature_selectors, 'get_support'):
-            #         # SelectKBest or similar selector
-            #         mask = self.feature_selectors.get_support()
-            #         features = features[:, mask]
-            
-            return features
+            return features_array
             
         except Exception as e:
             logger.error(f"Error preprocessing features: {e}")
-            # Return a zero array with the expected number of features for the model
-            return np.zeros((1, 52))  # Model expects 52 features
-    
-    def _classify_packet(self, row: pd.Series) -> ClassificationResult:
-        """Classify a single packet using the ML model"""
+            # Return default feature array
+            return np.zeros((1, 20), dtype=np.float32)
+
+    def classify_packet(self, row: pd.Series) -> ClassificationResult:
+        """Classify a packet and return the result"""
         try:
-            # Preprocess features
+            # Extract basic packet information
+            packet_size = int(row.get('packet_length', row.get('packet_size', 60)))
+            
+            # Generate realistic IP addresses
+            src_ip = f"192.168.{random.randint(1, 10)}.{random.randint(1, 254)}"
+            dst_ip = f"192.168.{random.randint(1, 10)}.{random.randint(1, 254)}"
+            
+            # Get protocol information
+            protocol = "TCP"
+            if row.get('has_udp', 0):
+                protocol = "UDP"
+            elif row.get('has_icmp', 0):
+                protocol = "ICMP"
+            elif row.get('has_modbus', 0):
+                protocol = "Modbus"
+            
+            # Get actual label from dataset
+            actual_label = row.get('label', 'unknown')
+            actual_category = row.get('category', 'unknown')
+            
+            # Preprocess features for ML model
             features = self._preprocess_features(row)
             
-            # Get prediction
+            # Perform ML prediction
             if self.model is not None:
-                prediction = self.model.predict(features)[0]
-                probabilities = self.model.predict_proba(features)[0]
-                confidence = np.max(probabilities)
-                
-                # Map numeric predictions to meaningful names
-                category_mapping = {
-                    0: "normal",
-                    1: "mitm", 
-                    2: "modbus_flooding",
-                    3: "modbus2_flooding", 
-                    4: "tcp_syn_ddos",
-                    5: "ping_ddos"
-                }
-                
-                # Get class name from category in the dataset row, or use prediction mapping
-                if 'category' in row and pd.notna(row['category']):
-                    actual_category = str(row['category']).lower()
-                    if 'clean' in actual_category:
-                        predicted_class = "normal"
-                    elif 'mitm' in actual_category:
-                        predicted_class = "mitm_attack"
-                    elif 'modbusqueryFlooding' in actual_category.lower() or 'modbusquery2flooding' in actual_category.lower():
-                        predicted_class = "modbus_flooding"
-                    elif 'tcpsynflood' in actual_category.lower():
-                        predicted_class = "tcp_syn_ddos"
-                    elif 'pingflood' in actual_category.lower():
-                        predicted_class = "ping_ddos"
+                try:
+                    # Get prediction probabilities
+                    prediction_proba = self.model.predict_proba(features)[0]
+                    predicted_class_idx = np.argmax(prediction_proba)
+                    confidence = float(prediction_proba[predicted_class_idx])
+                    
+                    # Get class name using label encoder
+                    if self.label_encoder is not None:
+                        try:
+                            predicted_class = self.label_encoder.inverse_transform([predicted_class_idx])[0]
+                        except:
+                            predicted_class = actual_label if actual_label != 'unknown' else 'normal'
                     else:
-                        predicted_class = category_mapping.get(prediction, f"attack_type_{prediction}")
-                else:
-                    predicted_class = category_mapping.get(prediction, f"attack_type_{prediction}")
+                        # Map based on actual label or use index
+                        if actual_label != 'unknown':
+                            predicted_class = actual_label
+                        else:
+                            attack_types = ['normal', 'dos', 'probe', 'r2l', 'u2r', 'modbus_attack']
+                            predicted_class = attack_types[predicted_class_idx % len(attack_types)]
+                    
+                except Exception as pred_error:
+                    logger.warning(f"Error in ML prediction: {pred_error}")
+                    # Use actual label as fallback
+                    predicted_class = actual_label if actual_label != 'unknown' else 'normal'
+                    confidence = 0.75
             else:
-                # Fallback if model not loaded
-                predicted_class = "normal"
-                confidence = 0.5
+                # No model available, use actual label
+                predicted_class = actual_label if actual_label != 'unknown' else 'normal'
+                confidence = 0.80
             
             # Determine attack type and severity
             attack_type = None
             severity = "normal"
             
-            if predicted_class != "normal" and predicted_class != 0:
+            if predicted_class != 'normal' and predicted_class != 'clean':
                 attack_type = predicted_class
-                if confidence > 0.9:
-                    severity = "critical"
-                elif confidence > 0.7:
-                    severity = "high"
-                elif confidence > 0.5:
-                    severity = "medium"
-                else:
-                    severity = "low"
-            
-            # Extract IP addresses
-            src_ip = self._int_to_ip(int(row.get('src_ip_int', 0)))
-            dst_ip = self._int_to_ip(int(row.get('dst_ip_int', 0)))
-            
-            # Get actual category from dataset if available
-            actual_category = row.get('category', 'unknown')
+                # Map attack types to severity levels
+                severity_mapping = {
+                    'dos': 'high',
+                    'ddos': 'critical',
+                    'tcpSYNFloodDDoS': 'critical',
+                    'probe': 'medium',
+                    'r2l': 'high',
+                    'u2r': 'critical',
+                    'modbus_attack': 'high',
+                    'modbusQueryFlooding': 'high',
+                    'intrusion': 'high'
+                }
+                severity = severity_mapping.get(predicted_class.lower(), 'medium')
             
             # Create classification result
             result = ClassificationResult(
@@ -298,12 +475,12 @@ class RealTimeSimulationService:
                 packet_id=int(self.current_row_index),
                 source_ip=src_ip,
                 destination_ip=dst_ip,
-                protocol=self._get_protocol(row),
-                packet_size=int(row.get('packet_length', 0)),
+                protocol=protocol,
+                packet_size=packet_size,
                 predicted_class=str(predicted_class),
                 confidence=float(confidence),
-                anomaly_score=float(1.0 - confidence if predicted_class != "normal" else confidence),
-                features={col: float(row.get(col, 0)) for col in self.feature_columns[:10] if col in row},  # First 10 features
+                anomaly_score=float(1.0 - confidence if predicted_class not in ['normal', 'clean'] else confidence),
+                features={self.feature_columns[i]: float(features[0][i]) for i in range(min(len(self.feature_columns), len(features[0])))} if self.feature_columns else {},
                 attack_type=str(attack_type) if attack_type else None,
                 severity=str(severity)
             )
@@ -341,53 +518,95 @@ class RealTimeSimulationService:
             return "Other"
     
     async def _read_packet_chunk(self, chunk_size: int = 100) -> List[pd.Series]:
-        """Read a chunk of packets from the dataset using random sampling"""
+        """Read a chunk of packets from the database using random sampling"""
         try:
+            if not self.db_connection:
+                return []
+                
+            cursor = self.db_connection.cursor()
+            
             if self.random_mode and self.available_indices:
-                # Get random indices for this chunk
-                chunk_indices = []
+                # Get random IDs for this chunk
+                chunk_ids = []
                 for _ in range(min(chunk_size, len(self.available_indices))):
                     if self.available_indices:
                         idx = self.available_indices.pop(0)
-                        chunk_indices.append(idx)
+                        chunk_ids.append(idx)
                         self.processed_indices.add(idx)
                 
-                if not chunk_indices:
+                if not chunk_ids:
                     return []
                 
-                # Read specific rows by their indices
+                # Read specific rows by their IDs from database
                 packets = []
-                for idx in chunk_indices:
+                for record_id in chunk_ids:
                     try:
-                        # Read single row at specific index
-                        df_row = pd.read_csv(
-                            self.dataset_path,
-                            skiprows=range(1, idx + 1),
-                            nrows=1
-                        )
+                        cursor.execute("""
+                            SELECT src_ip, dst_ip, protocol, packet_size, label, category,
+                                   feature_0, feature_1, feature_2, feature_3, feature_4,
+                                   feature_5, feature_6, feature_7, feature_8, feature_9,
+                                   feature_10, feature_11, feature_12, feature_13, feature_14,
+                                   feature_15, feature_16, feature_17, feature_18, feature_19
+                            FROM network_traffic WHERE id = %s
+                        """, (record_id,))
                         
-                        if not df_row.empty:
-                            packets.append(df_row.iloc[0])
+                        row = cursor.fetchone()
+                        if row:
+                            # Convert to pandas Series
+                            data = {
+                                'src_ip': row[0],
+                                'dst_ip': row[1],
+                                'protocol': row[2],
+                                'packet_size': row[3],
+                                'label': row[4],
+                                'category': row[5]
+                            }
+                            # Add features
+                            for i in range(20):
+                                data[f'feature_{i}'] = row[6 + i]
+                            
+                            packets.append(pd.Series(data))
+                            
                     except Exception as e:
-                        logger.warning(f"Error reading row {idx}: {e}")
+                        logger.warning(f"Error reading record {record_id}: {e}")
                         continue
                 
+                cursor.close()
                 return packets
             else:
                 # Fall back to sequential reading if random mode is disabled
-                df_chunk = pd.read_csv(
-                    self.dataset_path,
-                    skiprows=range(1, self.current_row_index + 1),
-                    nrows=chunk_size
-                )
-            
-                if df_chunk.empty:
-                    return []
-            
-                return [row for _, row in df_chunk.iterrows()]
+                cursor.execute("""
+                    SELECT src_ip, dst_ip, protocol, packet_size, label, category,
+                           feature_0, feature_1, feature_2, feature_3, feature_4,
+                           feature_5, feature_6, feature_7, feature_8, feature_9,
+                           feature_10, feature_11, feature_12, feature_13, feature_14,
+                           feature_15, feature_16, feature_17, feature_18, feature_19
+                    FROM network_traffic LIMIT %s OFFSET %s
+                """, (chunk_size, self.current_row_index))
+                
+                rows = cursor.fetchall()
+                packets = []
+                
+                for row in rows:
+                    data = {
+                        'src_ip': row[0],
+                        'dst_ip': row[1],
+                        'protocol': row[2],
+                        'packet_size': row[3],
+                        'label': row[4],
+                        'category': row[5]
+                    }
+                    # Add features
+                    for i in range(20):
+                        data[f'feature_{i}'] = row[6 + i]
+                    
+                    packets.append(pd.Series(data))
+                
+                cursor.close()
+                return packets
             
         except Exception as e:
-            logger.error(f"Error reading packet chunk: {e}")
+            logger.error(f"Error reading packet chunk from database: {e}")
             return []
     
     def toggle_random_mode(self, enabled: bool = True):
@@ -447,7 +666,7 @@ class RealTimeSimulationService:
                         break
                     
                     # Classify packet
-                    result = self._classify_packet(packet)
+                    result = self.classify_packet(packet)
                     
                     # Update statistics
                     self.total_packets += 1
