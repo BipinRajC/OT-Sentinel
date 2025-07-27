@@ -35,6 +35,8 @@ import {
   MenuItem,
   Tooltip,
   Badge,
+  LinearProgress,
+  Divider,
 } from '@mui/material';
 import {
   Security as SecurityIcon,
@@ -49,8 +51,9 @@ import {
   Timeline as TimelineIcon,
   Shield as ShieldIcon,
   Computer as ComputerIcon,
+  Refresh as RefreshIcon,
 } from '@mui/icons-material';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, LineChart, Line, BarChart, Bar } from 'recharts';
 
 function TabPanel({ children, value, index, ...other }) {
   return (
@@ -81,18 +84,22 @@ function SecurityMonitoring({ alerts, devices, onAcknowledgeAlert }) {
   const [searchTerm, setSearchTerm] = useState('');
   const [securityAssessment, setSecurityAssessment] = useState(null);
   const [anomalyPrediction, setAnomalyPrediction] = useState(null);
+  const [securityTrends, setSecurityTrends] = useState([]);
+  const [threatLevels, setThreatLevels] = useState({});
+  const [realtimeAlerts, setRealtimeAlerts] = useState([]);
 
   useEffect(() => {
     loadSecurityData();
-    const interval = setInterval(loadSecurityData, 30000); // Refresh every 30 seconds
+    const interval = setInterval(loadSecurityData, 5000); // Refresh every 5 seconds
     return () => clearInterval(interval);
   }, []);
 
   const loadSecurityData = async () => {
     try {
-      const [assessmentRes, anomalyRes] = await Promise.all([
+      const [assessmentRes, anomalyRes, realtimeRes] = await Promise.all([
         fetch('http://localhost:8000/api/ml/security/assessment'),
-        fetch('http://localhost:8000/api/ml/predict/anomaly')
+        fetch('http://localhost:8000/api/ml/predict/anomaly'),
+        fetch('http://localhost:8000/api/realtime/recent?limit=100')
       ]);
       
       if (assessmentRes.ok) {
@@ -101,12 +108,50 @@ function SecurityMonitoring({ alerts, devices, onAcknowledgeAlert }) {
           setSecurityAssessment(assessmentData.assessment);
         }
       }
-      
+
       if (anomalyRes.ok) {
         const anomalyData = await anomalyRes.json();
         if (anomalyData.status === 'success') {
           setAnomalyPrediction(anomalyData.prediction);
         }
+      }
+
+      if (realtimeRes.ok) {
+        const realtimeData = await realtimeRes.json();
+        const classifications = realtimeData.data || [];
+        
+        // Process security trends
+        const trends = classifications.slice(0, 20).reverse().map((item, index) => ({
+          time: new Date(item.timestamp).toLocaleTimeString(),
+          normal: item.predicted_class === 'normal' ? 1 : 0,
+          attacks: item.predicted_class !== 'normal' ? 1 : 0,
+          confidence: item.confidence || 0.5
+        }));
+        setSecurityTrends(trends);
+
+        // Calculate threat levels
+        const threatCounts = {};
+        classifications.forEach(item => {
+          const threat = item.predicted_class || 'normal';
+          threatCounts[threat] = (threatCounts[threat] || 0) + 1;
+        });
+        setThreatLevels(threatCounts);
+
+        // Generate realtime alerts from classifications
+        const alertsFromData = classifications
+          .filter(item => item.predicted_class !== 'normal')
+          .slice(0, 10)
+          .map((item, index) => ({
+            id: `alert-${index}`,
+            severity: item.severity || 'medium',
+            message: `${item.predicted_class?.toUpperCase()} attack detected from ${item.source_ip}`,
+            timestamp: new Date(item.timestamp),
+            source: item.source_ip,
+            destination: item.destination_ip,
+            protocol: item.protocol,
+            acknowledged: false
+          }));
+        setRealtimeAlerts(alertsFromData);
       }
     } catch (error) {
       console.error('Error loading security data:', error);
@@ -117,195 +162,211 @@ function SecurityMonitoring({ alerts, devices, onAcknowledgeAlert }) {
     setCurrentTab(newValue);
   };
 
-  const handleViewAlert = (alert) => {
+  const handleAlertClick = (alert) => {
     setSelectedAlert(alert);
     setDialogOpen(true);
   };
 
+  const handleDialogClose = () => {
+    setDialogOpen(false);
+    setSelectedAlert(null);
+  };
+
   const handleAcknowledgeAlert = async (alertId) => {
     try {
-      await onAcknowledgeAlert(alertId);
-      setDialogOpen(false);
+      if (onAcknowledgeAlert) {
+        await onAcknowledgeAlert(alertId);
+      }
+      // Update local state
+      setRealtimeAlerts(prev => 
+        prev.map(alert => 
+          alert.id === alertId ? { ...alert, acknowledged: true } : alert
+        )
+      );
     } catch (error) {
       console.error('Error acknowledging alert:', error);
     }
   };
 
-  const getSeverityIcon = (severity) => {
-    switch (severity) {
-      case 'critical': return <ErrorIcon color="error" />;
-      case 'high': return <WarningIcon color="warning" />;
-      case 'medium': return <InfoIcon color="info" />;
-      case 'low': return <CheckCircleIcon color="success" />;
-      default: return <SecurityIcon />;
-    }
-  };
-
   const getSeverityColor = (severity) => {
     switch (severity) {
-      case 'critical': return 'error';
-      case 'high': return 'warning';
-      case 'medium': return 'info';
-      case 'low': return 'success';
-      default: return 'default';
+      case 'critical': return '#f44336';
+      case 'high': return '#ff5722';
+      case 'medium': return '#ff9800';
+      case 'low': return '#4caf50';
+      default: return '#757575';
     }
   };
 
-  // Filter alerts based on search and filters
-  const filteredAlerts = alerts.filter(alert => {
-    const matchesSearch = searchTerm === '' || 
-      alert.alert_type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      alert.description.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    const matchesSeverity = filterSeverity === '' || alert.severity === filterSeverity;
-    const matchesAcknowledged = filterAcknowledged === '' || 
-      (filterAcknowledged === 'true' ? (alert.acknowledged || false) : !(alert.acknowledged || false));
-    
-    return matchesSearch && matchesSeverity && matchesAcknowledged;
-  });
-
-  // Generate alert timeline data
-  const alertTimelineData = alerts.slice(0, 20).map(alert => ({
-    timestamp: new Date(alert.timestamp).getTime(),
-    count: 1,
-    severity: alert.severity,
-  })).sort((a, b) => a.timestamp - b.timestamp);
-
-  // Aggregate alerts by hour for trend analysis
-  const alertTrendData = {};
-  alerts.forEach(alert => {
-    const hour = new Date(alert.timestamp).toISOString().slice(0, 13);
-    if (!alertTrendData[hour]) {
-      alertTrendData[hour] = { timestamp: hour, critical: 0, high: 0, medium: 0, low: 0 };
+  const getSeverityIcon = (severity) => {
+    switch (severity) {
+      case 'critical': return <ErrorIcon />;
+      case 'high': return <WarningIcon />;
+      case 'medium': return <InfoIcon />;
+      case 'low': return <CheckCircleIcon />;
+      default: return <InfoIcon />;
     }
-    alertTrendData[hour][alert.severity] += 1;
+  };
+
+  const getThreatLevelColor = (threatType) => {
+    switch (threatType) {
+      case 'normal': return '#4caf50';
+      case 'dos': return '#f44336';
+      case 'probe': return '#ff9800';
+      case 'r2l': return '#9c27b0';
+      case 'u2r': return '#ff5722';
+      case 'modbus_attack': return '#e91e63';
+      default: return '#757575';
+    }
+  };
+
+  // Combine alerts from props and realtime data
+  const allAlerts = [...(alerts || []), ...realtimeAlerts];
+  
+  // Filter alerts
+  const filteredAlerts = allAlerts.filter(alert => {
+    const matchesSeverity = !filterSeverity || alert.severity === filterSeverity;
+    const matchesAcknowledged = !filterAcknowledged || 
+      (filterAcknowledged === 'acknowledged' ? alert.acknowledged : !alert.acknowledged);
+    const matchesSearch = !searchTerm || 
+      alert.message?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      alert.source?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesSeverity && matchesAcknowledged && matchesSearch;
   });
 
-  const trendData = Object.values(alertTrendData).slice(-24); // Last 24 hours
+  const paginatedAlerts = filteredAlerts.slice(
+    page * rowsPerPage,
+    page * rowsPerPage + rowsPerPage
+  );
 
-  // Security metrics - enhanced with ML data
   const securityMetrics = {
-    totalAlerts: alerts.length,
-    criticalAlerts: alerts.filter(a => a.severity === 'critical').length,
-    unacknowledgedAlerts: alerts.filter(a => !(a.acknowledged || false)).length,
-    devicesWithAlerts: new Set(alerts.map(a => a.device_id)).size,
-    avgResponseTime: '2.5 min', // Mock data
-    threatScore: securityAssessment ? securityAssessment.overall_risk_score : 
-                 Math.round(alerts.filter(a => a.severity === 'critical').length * 20 + 
-                           alerts.filter(a => a.severity === 'high').length * 10),
-    aiThreatLevel: securityAssessment ? securityAssessment.risk_level : 'unknown',
-    anomalyDetected: anomalyPrediction ? anomalyPrediction.is_anomaly : false,
-    anomalyConfidence: anomalyPrediction ? Math.round(anomalyPrediction.confidence * 100) : 0,
+    totalAlerts: allAlerts.length,
+    criticalAlerts: allAlerts.filter(a => a.severity === 'critical').length,
+    acknowledgedAlerts: allAlerts.filter(a => a.acknowledged).length,
+    securityScore: securityAssessment?.overall_score || 85
   };
 
   return (
-    <Box>
+    <Box sx={{ 
+      background: 'linear-gradient(135deg, #020508 0%, #0a0f1a 50%, #0f1322 100%)',
+      minHeight: '100vh',
+      p: 3
+    }}>
       {/* Header */}
       <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-        <Typography variant="h4" fontWeight="bold" color="primary">
-          Security Monitoring
+        <Typography variant="h4" fontWeight="bold" sx={{ 
+          background: 'linear-gradient(45deg, #ff1744 30%, #f44336 90%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text'
+        }}>
+          Security Monitoring Center
         </Typography>
-        <Box display="flex" gap={2}>
-          <Chip 
-            icon={<ShieldIcon />}
-            label={`AI Risk Score: ${securityMetrics.threatScore}/100`}
-            color={securityMetrics.threatScore > 70 ? 'error' : securityMetrics.threatScore > 40 ? 'warning' : 'success'}
-            variant="outlined"
-          />
-          {securityMetrics.anomalyDetected && (
-            <Chip 
-              icon={<WarningIcon />}
-              label={`Anomaly Detected (${securityMetrics.anomalyConfidence}%)`}
-              color="error"
-              variant="filled"
-            />
-          )}
-          <Chip 
-            icon={<SecurityIcon />}
-            label={`Threat Level: ${securityMetrics.aiThreatLevel.toUpperCase()}`}
-            color={securityMetrics.aiThreatLevel === 'low' ? 'success' : 'warning'}
-            variant="outlined"
-          />
-        </Box>
+        <Button
+          variant="contained"
+          startIcon={<RefreshIcon />}
+          onClick={loadSecurityData}
+          sx={{
+            background: 'linear-gradient(135deg, #ff1744 0%, #d50000 100%)',
+            color: 'white',
+            fontWeight: 600,
+            '&:hover': {
+              background: 'linear-gradient(135deg, #d50000 0%, #b71c1c 100%)'
+            }
+          }}
+        >
+          Refresh
+        </Button>
       </Box>
 
-      {/* Security Overview Cards */}
+      {/* Security Metrics Cards */}
       <Grid container spacing={3} mb={4}>
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
+        <Grid item xs={12} md={3}>
+          <Card sx={{ 
+            background: 'linear-gradient(135deg, #0f1322 0%, #1a2332 100%)',
+            border: '1px solid #ff1744',
+            color: 'white',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)'
+          }}>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
-                  <Typography color="textSecondary" variant="h6">
-                    Total Alerts
-                  </Typography>
-                  <Typography variant="h3" fontWeight="bold">
+                  <Typography variant="h4" fontWeight="bold" color="#ff1744">
                     {securityMetrics.totalAlerts}
                   </Typography>
+                  <Typography variant="body2" color="rgba(255,255,255,0.8)">
+                    Total Alerts
+                  </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: '#2196f3' }}>
-                  <SecurityIcon />
-                </Avatar>
+                <SecurityIcon sx={{ fontSize: 40, color: '#ff1744' }} />
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
+        <Grid item xs={12} md={3}>
+          <Card sx={{ 
+            background: 'linear-gradient(135deg, #0f1322 0%, #1a2332 100%)',
+            border: '1px solid #ff6f00',
+            color: 'white',
+            boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)'
+          }}>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
-                  <Typography color="textSecondary" variant="h6">
-                    Critical Alerts
-                  </Typography>
-                  <Typography variant="h3" fontWeight="bold" color="error.main">
+                  <Typography variant="h4" fontWeight="bold" color="#ff6f00">
                     {securityMetrics.criticalAlerts}
                   </Typography>
+                  <Typography variant="body2" color="rgba(255,255,255,0.8)">
+                    Critical Alerts
+                  </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: '#f44336' }}>
-                  <ErrorIcon />
-                </Avatar>
+                <ErrorIcon sx={{ fontSize: 40, color: '#ff6f00' }} />
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
+        <Grid item xs={12} md={3}>
+          <Card sx={{ 
+            background: 'linear-gradient(135deg, #1b5e20 0%, #2e7d32 100%)',
+            border: '1px solid #4caf50',
+            color: 'white'
+          }}>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
-                  <Typography color="textSecondary" variant="h6">
-                    Unacknowledged
+                  <Typography variant="h4" fontWeight="bold" color="#4caf50">
+                    {securityMetrics.acknowledgedAlerts}
                   </Typography>
-                  <Typography variant="h3" fontWeight="bold" color="warning.main">
-                    {securityMetrics.unacknowledgedAlerts}
+                  <Typography variant="body2" color="rgba(255,255,255,0.7)">
+                    Acknowledged
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: '#ff9800' }}>
-                  <WarningIcon />
-                </Avatar>
+                <CheckIcon sx={{ fontSize: 40, color: '#4caf50' }} />
               </Box>
             </CardContent>
           </Card>
         </Grid>
 
-        <Grid item xs={12} sm={6} md={3}>
-          <Card>
+        <Grid item xs={12} md={3}>
+          <Card sx={{ 
+            background: 'linear-gradient(135deg, #2d1b69 0%, #1e3c72 100%)',
+            border: '1px solid #9c27b0',
+            color: 'white'
+          }}>
             <CardContent>
               <Box display="flex" alignItems="center" justifyContent="space-between">
                 <Box>
-                  <Typography color="textSecondary" variant="h6">
-                    Affected Devices
+                  <Typography variant="h4" fontWeight="bold" color="#9c27b0">
+                    {securityMetrics.securityScore}%
                   </Typography>
-                  <Typography variant="h3" fontWeight="bold">
-                    {securityMetrics.devicesWithAlerts}
+                  <Typography variant="body2" color="rgba(255,255,255,0.7)">
+                    Security Score
                   </Typography>
                 </Box>
-                <Avatar sx={{ bgcolor: '#ff5722' }}>
-                  <ComputerIcon />
-                </Avatar>
+                <ShieldIcon sx={{ fontSize: 40, color: '#9c27b0' }} />
               </Box>
             </CardContent>
           </Card>
@@ -313,159 +374,78 @@ function SecurityMonitoring({ alerts, devices, onAcknowledgeAlert }) {
       </Grid>
 
       {/* Tabs */}
-      <Card>
-        <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={currentTab} onChange={handleTabChange} variant="fullWidth">
-            <Tab label="Alert Dashboard" />
-            <Tab label="Alert List" />
+      <Card sx={{ 
+        background: 'linear-gradient(135deg, #0f1322 0%, #1a2332 100%)',
+        border: '1px solid #00ffff',
+        color: 'white',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.6)'
+      }}>
+        <Box sx={{ borderBottom: 1, borderColor: 'rgba(0, 255, 255, 0.2)' }}>
+          <Tabs 
+            value={currentTab} 
+            onChange={handleTabChange}
+            sx={{
+              '& .MuiTab-root': {
+                color: 'rgba(255,255,255,0.7)',
+                fontWeight: 500,
+                '&.Mui-selected': {
+                  color: '#00ffff',
+                  background: 'rgba(0, 255, 255, 0.1)'
+                },
+                '&:hover': {
+                  color: '#00ffff',
+                  background: 'rgba(0, 255, 255, 0.05)'
+                }
+              },
+              '& .MuiTabs-indicator': {
+                backgroundColor: '#00ffff',
+                height: 3
+              }
+            }}
+          >
+            <Tab label="Active Alerts" />
+            <Tab label="Security Trends" />
             <Tab label="Threat Analysis" />
+            <Tab label="System Health" />
           </Tabs>
         </Box>
 
         <TabPanel value={currentTab} index={0}>
-          {/* Alert Dashboard */}
-          <Grid container spacing={3}>
-            {/* Recent Critical Alerts */}
-            <Grid item xs={12} md={6}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="h6" gutterBottom fontWeight="bold">
-                    Recent Critical Alerts
-                  </Typography>
-                  <List>
-                    {alerts.filter(a => a.severity === 'critical').slice(0, 5).map((alert) => (
-                      <ListItem key={alert.id} divider>
-                        <ListItemIcon>
-                          {getSeverityIcon(alert.severity)}
-                        </ListItemIcon>
-                        <ListItemText
-                          primary={alert.alert_type}
-                          secondary={
-                            <Box>
-                              <Typography variant="body2" color="textSecondary">
-                                {alert.description}
-                              </Typography>
-                              <Typography variant="caption" color="textSecondary">
-                                {new Date(alert.timestamp).toLocaleString()}
-                              </Typography>
-                            </Box>
-                          }
-                        />
-                        <ListItemSecondaryAction>
-                          <IconButton onClick={() => handleViewAlert(alert)} size="small">
-                            <VisibilityIcon />
-                          </IconButton>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                    ))}
-                  </List>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Alert Trend Chart */}
-            <Grid item xs={12} md={6}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="h6" gutterBottom fontWeight="bold">
-                    Alert Trends (24h)
-                  </Typography>
-                  <ResponsiveContainer width="100%" height={300}>
-                    <AreaChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="timestamp" 
-                        tickFormatter={(time) => new Date(time).getHours() + ':00'}
-                      />
-                      <YAxis />
-                      <RechartsTooltip />
-                      <Area type="monotone" dataKey="critical" stackId="1" stroke="#f44336" fill="#f44336" />
-                      <Area type="monotone" dataKey="high" stackId="1" stroke="#ff9800" fill="#ff9800" />
-                      <Area type="monotone" dataKey="medium" stackId="1" stroke="#2196f3" fill="#2196f3" />
-                      <Area type="monotone" dataKey="low" stackId="1" stroke="#4caf50" fill="#4caf50" />
-                    </AreaChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </Grid>
-
-            {/* Device Security Status */}
-            <Grid item xs={12}>
-              <Card variant="outlined">
-                <CardContent>
-                  <Typography variant="h6" gutterBottom fontWeight="bold">
-                    Device Security Status
-                  </Typography>
-                  <Grid container spacing={2}>
-                    {devices.map((device) => {
-                      const deviceAlerts = alerts.filter(a => a.device_id === device.id);
-                      const criticalCount = deviceAlerts.filter(a => a.severity === 'critical').length;
-                      
-                      return (
-                        <Grid item xs={12} sm={6} md={4} lg={3} key={device.id}>
-                          <Paper 
-                            sx={{ 
-                              p: 2, 
-                              border: '1px solid',
-                              borderColor: criticalCount > 0 ? 'error.main' : 
-                                          deviceAlerts.length > 0 ? 'warning.main' : 'success.main'
-                            }}
-                          >
-                            <Box display="flex" alignItems="center" justifyContent="space-between" mb={1}>
-                              <Typography variant="subtitle1" fontWeight="bold">
-                                {device.hostname}
-                              </Typography>
-                              <Badge badgeContent={deviceAlerts.length} color="error">
-                                <ComputerIcon />
-                              </Badge>
-                            </Box>
-                            <Typography variant="body2" color="textSecondary" gutterBottom>
-                              {device.device_type} - {device.ip_address}
-                            </Typography>
-                            <Box display="flex" gap={1} flexWrap="wrap">
-                              <Chip 
-                                label={`Risk: ${device.risk_score}`}
-                                size="small"
-                                color={device.risk_score > 70 ? 'error' : device.risk_score > 40 ? 'warning' : 'success'}
-                              />
-                              {criticalCount > 0 && (
-                                <Chip label={`${criticalCount} Critical`} size="small" color="error" />
-                              )}
-                            </Box>
-                          </Paper>
-                        </Grid>
-                      );
-                    })}
-                  </Grid>
-                </CardContent>
-              </Card>
-            </Grid>
-          </Grid>
-        </TabPanel>
-
-        <TabPanel value={currentTab} index={1}>
-          {/* Alert List with Filters */}
+          {/* Active Alerts */}
           <Box mb={3}>
             <Grid container spacing={2} alignItems="center">
               <Grid item xs={12} md={4}>
                 <TextField
                   fullWidth
-                  label="Search alerts"
-                  variant="outlined"
+                  label="Search alerts..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   InputProps={{
-                    startAdornment: <SearchIcon sx={{ mr: 1, color: 'text.secondary' }} />
+                    startAdornment: <SearchIcon sx={{ color: 'rgba(255,255,255,0.5)', mr: 1 }} />
+                  }}
+                  sx={{
+                    '& .MuiOutlinedInput-root': {
+                      color: 'white',
+                      '& fieldset': { borderColor: 'rgba(255,255,255,0.3)' },
+                      '&:hover fieldset': { borderColor: 'rgba(255,255,255,0.5)' },
+                      '&.Mui-focused fieldset': { borderColor: '#00bcd4' }
+                    },
+                    '& .MuiInputLabel-root': { color: 'rgba(255,255,255,0.7)' }
                   }}
                 />
               </Grid>
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth>
-                  <InputLabel>Severity</InputLabel>
+                  <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Severity</InputLabel>
                   <Select
                     value={filterSeverity}
                     onChange={(e) => setFilterSeverity(e.target.value)}
-                    label="Severity"
+                    sx={{
+                      color: 'white',
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#00bcd4' }
+                    }}
                   >
                     <MenuItem value="">All</MenuItem>
                     <MenuItem value="critical">Critical</MenuItem>
@@ -477,153 +457,371 @@ function SecurityMonitoring({ alerts, devices, onAcknowledgeAlert }) {
               </Grid>
               <Grid item xs={12} md={3}>
                 <FormControl fullWidth>
-                  <InputLabel>Status</InputLabel>
+                  <InputLabel sx={{ color: 'rgba(255,255,255,0.7)' }}>Status</InputLabel>
                   <Select
                     value={filterAcknowledged}
                     onChange={(e) => setFilterAcknowledged(e.target.value)}
-                    label="Status"
+                    sx={{
+                      color: 'white',
+                      '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.3)' },
+                      '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.5)' },
+                      '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#00bcd4' }
+                    }}
                   >
                     <MenuItem value="">All</MenuItem>
-                    <MenuItem value="false">Unacknowledged</MenuItem>
-                    <MenuItem value="true">Acknowledged</MenuItem>
+                    <MenuItem value="acknowledged">Acknowledged</MenuItem>
+                    <MenuItem value="unacknowledged">Unacknowledged</MenuItem>
                   </Select>
                 </FormControl>
               </Grid>
             </Grid>
           </Box>
 
-          <TableContainer component={Paper}>
+          <TableContainer component={Paper} sx={{ 
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.1)'
+          }}>
             <Table>
               <TableHead>
                 <TableRow>
-                  <TableCell>Severity</TableCell>
-                  <TableCell>Alert Type</TableCell>
-                  <TableCell>Device</TableCell>
-                  <TableCell>Timestamp</TableCell>
-                  <TableCell>Status</TableCell>
-                  <TableCell>Actions</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Severity</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Message</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Source</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Time</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Status</TableCell>
+                  <TableCell sx={{ color: 'white', fontWeight: 'bold' }}>Actions</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
-                {filteredAlerts
-                  .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
-                  .map((alert) => (
-                    <TableRow key={alert.id} hover>
-                      <TableCell>
-                        <Chip
-                          icon={getSeverityIcon(alert.severity)}
-                          label={alert.severity.toUpperCase()}
-                          color={getSeverityColor(alert.severity)}
+                {paginatedAlerts.map((alert, index) => (
+                  <TableRow 
+                    key={alert.id || index}
+                    sx={{ 
+                      '&:hover': { backgroundColor: 'rgba(255, 255, 255, 0.05)' },
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => handleAlertClick(alert)}
+                  >
+                    <TableCell>
+                      <Chip
+                        icon={getSeverityIcon(alert.severity)}
+                        label={alert.severity?.toUpperCase()}
+                        size="small"
+                        sx={{
+                          backgroundColor: getSeverityColor(alert.severity),
+                          color: 'white',
+                          fontWeight: 'bold'
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ color: 'white' }}>{alert.message}</TableCell>
+                    <TableCell sx={{ color: 'white' }}>{alert.source || 'Unknown'}</TableCell>
+                    <TableCell sx={{ color: 'white' }}>
+                      {alert.timestamp ? new Date(alert.timestamp).toLocaleString() : 'N/A'}
+                    </TableCell>
+                    <TableCell>
+                      <Chip
+                        label={alert.acknowledged ? 'ACK' : 'NEW'}
+                        size="small"
+                        sx={{
+                          backgroundColor: alert.acknowledged ? '#4caf50' : '#ff9800',
+                          color: 'white'
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell>
+                      {!alert.acknowledged && (
+                        <Button
                           size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2" fontWeight="medium">
-                          {alert.alert_type}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {alert.device_ip}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Typography variant="body2">
-                          {new Date(alert.timestamp).toLocaleString()}
-                        </Typography>
-                      </TableCell>
-                      <TableCell>
-                        <Chip
-                          label={(alert.acknowledged || false) ? 'Acknowledged' : 'Pending'}
-                          color={(alert.acknowledged || false) ? 'success' : 'warning'}
-                          size="small"
-                        />
-                      </TableCell>
-                      <TableCell>
-                        <Box display="flex" gap={1}>
-                          <Tooltip title="View Details">
-                            <IconButton onClick={() => handleViewAlert(alert)} size="small">
-                              <VisibilityIcon />
-                            </IconButton>
-                          </Tooltip>
-                          {!(alert.acknowledged || false) && (
-                            <Tooltip title="Acknowledge">
-                              <IconButton 
-                                onClick={() => handleAcknowledgeAlert(alert.id)}
-                                size="small"
-                                color="success"
-                              >
-                                <CheckIcon />
-                              </IconButton>
-                            </Tooltip>
-                          )}
-                        </Box>
-                      </TableCell>
-                    </TableRow>
-                  ))}
+                          variant="contained"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleAcknowledgeAlert(alert.id);
+                          }}
+                          sx={{
+                            background: 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)',
+                            color: 'white'
+                          }}
+                        >
+                          Acknowledge
+                        </Button>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))}
               </TableBody>
             </Table>
           </TableContainer>
 
           <TablePagination
-            rowsPerPageOptions={[5, 10, 25]}
             component="div"
             count={filteredAlerts.length}
-            rowsPerPage={rowsPerPage}
             page={page}
             onPageChange={(event, newPage) => setPage(newPage)}
+            rowsPerPage={rowsPerPage}
             onRowsPerPageChange={(event) => {
               setRowsPerPage(parseInt(event.target.value, 10));
               setPage(0);
             }}
+            sx={{
+              color: 'white',
+              '& .MuiTablePagination-select': { color: 'white' },
+              '& .MuiTablePagination-selectIcon': { color: 'white' }
+            }}
           />
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={1}>
+          {/* Security Trends */}
+          <Card sx={{ 
+            background: 'rgba(255, 255, 255, 0.05)',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            mb: 3
+          }}>
+            <CardContent>
+              <Typography variant="h6" gutterBottom color="#00bcd4" fontWeight="bold">
+                Security Events Timeline
+              </Typography>
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={securityTrends}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.1)" />
+                  <XAxis 
+                    dataKey="time" 
+                    tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }}
+                  />
+                  <YAxis tick={{ fill: 'rgba(255,255,255,0.7)', fontSize: 12 }} />
+                  <RechartsTooltip 
+                    contentStyle={{
+                      backgroundColor: '#1a1f3a',
+                      border: '1px solid #00bcd4',
+                      borderRadius: '8px',
+                      color: 'white'
+                    }}
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="normal" 
+                    stackId="1"
+                    stroke="#4caf50" 
+                    fill="#4caf50" 
+                    fillOpacity={0.6}
+                    name="Normal Traffic"
+                  />
+                  <Area 
+                    type="monotone" 
+                    dataKey="attacks" 
+                    stackId="1"
+                    stroke="#f44336" 
+                    fill="#f44336" 
+                    fillOpacity={0.8}
+                    name="Security Events"
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
         </TabPanel>
 
         <TabPanel value={currentTab} index={2}>
           {/* Threat Analysis */}
           <Grid container spacing={3}>
-            <Grid item xs={12} md={8}>
-              <Card variant="outlined">
+            <Grid item xs={12} md={6}>
+              <Card sx={{ 
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom fontWeight="bold">
-                    Threat Intelligence Timeline
+                  <Typography variant="h6" gutterBottom color="#f44336" fontWeight="bold">
+                    Threat Distribution
                   </Typography>
-                  <ResponsiveContainer width="100%" height={400}>
-                    <LineChart data={trendData}>
-                      <CartesianGrid strokeDasharray="3 3" />
-                      <XAxis 
-                        dataKey="timestamp" 
-                        tickFormatter={(time) => new Date(time).getHours() + ':00'}
-                      />
-                      <YAxis />
-                      <RechartsTooltip />
-                      <Line type="monotone" dataKey="critical" stroke="#f44336" strokeWidth={3} />
-                      <Line type="monotone" dataKey="high" stroke="#ff9800" strokeWidth={2} />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <Box sx={{ mt: 2 }}>
+                    {Object.entries(threatLevels).map(([threat, count]) => (
+                      <Box key={threat} sx={{ mb: 2 }}>
+                        <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                          <Typography variant="body2" color="white" fontWeight="medium">
+                            {threat.replace('_', ' ').toUpperCase()}
+                          </Typography>
+                          <Typography variant="body2" color="#00bcd4" fontWeight="bold">
+                            {count} events
+                          </Typography>
+                        </Box>
+                        <LinearProgress
+                          variant="determinate"
+                          value={(count / Math.max(...Object.values(threatLevels))) * 100}
+                          sx={{
+                            height: 8,
+                            borderRadius: 4,
+                            backgroundColor: 'rgba(255,255,255,0.1)',
+                            '& .MuiLinearProgress-bar': {
+                              backgroundColor: getThreatLevelColor(threat),
+                              borderRadius: 4
+                            }
+                          }}
+                        />
+                      </Box>
+                    ))}
+                  </Box>
                 </CardContent>
               </Card>
             </Grid>
 
-            <Grid item xs={12} md={4}>
-              <Card variant="outlined">
+            <Grid item xs={12} md={6}>
+              <Card sx={{ 
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
                 <CardContent>
-                  <Typography variant="h6" gutterBottom fontWeight="bold">
-                    Threat Summary
+                  <Typography variant="h6" gutterBottom color="#9c27b0" fontWeight="bold">
+                    Security Assessment
+                  </Typography>
+                  {securityAssessment ? (
+                    <Box>
+                      <Box display="flex" justifyContent="space-between" alignItems="center" mb={2}>
+                        <Typography variant="body2" color="white">Overall Score</Typography>
+                        <Typography variant="h6" color="#00bcd4" fontWeight="bold">
+                          {securityAssessment.overall_score}%
+                        </Typography>
+                      </Box>
+                      <LinearProgress
+                        variant="determinate"
+                        value={securityAssessment.overall_score}
+                        sx={{
+                          height: 10,
+                          borderRadius: 5,
+                          backgroundColor: 'rgba(255,255,255,0.1)',
+                          '& .MuiLinearProgress-bar': {
+                            backgroundColor: securityAssessment.overall_score > 80 ? '#4caf50' : 
+                                           securityAssessment.overall_score > 60 ? '#ff9800' : '#f44336',
+                            borderRadius: 5
+                          }
+                        }}
+                      />
+                      <Typography variant="body2" color="rgba(255,255,255,0.7)" mt={2}>
+                        Risk Level: {securityAssessment.risk_level || 'Moderate'}
+                      </Typography>
+                    </Box>
+                  ) : (
+                    <Typography variant="body2" color="rgba(255,255,255,0.7)">
+                      Loading assessment...
+                    </Typography>
+                  )}
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </TabPanel>
+
+        <TabPanel value={currentTab} index={3}>
+          {/* System Health */}
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={6}>
+              <Card sx={{ 
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom color="#4caf50" fontWeight="bold">
+                    Security Systems Status
+                  </Typography>
+                  <List>
+                    <ListItem>
+                      <ListItemIcon>
+                        <CheckCircleIcon sx={{ color: '#4caf50' }} />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Intrusion Detection System"
+                        secondary="Active - All sensors operational"
+                        sx={{ 
+                          '& .MuiListItemText-primary': { color: 'white' },
+                          '& .MuiListItemText-secondary': { color: 'rgba(255,255,255,0.7)' }
+                        }}
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemIcon>
+                        <CheckCircleIcon sx={{ color: '#4caf50' }} />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Firewall Protection"
+                        secondary="Active - Rules updated"
+                        sx={{ 
+                          '& .MuiListItemText-primary': { color: 'white' },
+                          '& .MuiListItemText-secondary': { color: 'rgba(255,255,255,0.7)' }
+                        }}
+                      />
+                    </ListItem>
+                    <ListItem>
+                      <ListItemIcon>
+                        <WarningIcon sx={{ color: '#ff9800' }} />
+                      </ListItemIcon>
+                      <ListItemText 
+                        primary="Antivirus Scanner"
+                        secondary="Warning - Definitions need update"
+                        sx={{ 
+                          '& .MuiListItemText-primary': { color: 'white' },
+                          '& .MuiListItemText-secondary': { color: 'rgba(255,255,255,0.7)' }
+                        }}
+                      />
+                    </ListItem>
+                  </List>
+                </CardContent>
+              </Card>
+            </Grid>
+
+            <Grid item xs={12} md={6}>
+              <Card sx={{ 
+                background: 'rgba(255, 255, 255, 0.05)',
+                border: '1px solid rgba(255, 255, 255, 0.1)'
+              }}>
+                <CardContent>
+                  <Typography variant="h6" gutterBottom color="#00bcd4" fontWeight="bold">
+                    Network Security Metrics
                   </Typography>
                   <Box sx={{ mt: 2 }}>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Total Threats:</strong> {securityMetrics.totalAlerts}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Active Threats:</strong> {securityMetrics.unacknowledgedAlerts}
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Threat Score:</strong> {securityMetrics.threatScore}/500
-                    </Typography>
-                    <Typography variant="body1" gutterBottom>
-                      <strong>Avg Response:</strong> {securityMetrics.avgResponseTime}
-                    </Typography>
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1}>
+                      <Typography variant="body2" color="white">Firewall Efficiency</Typography>
+                      <Typography variant="body2" color="#4caf50" fontWeight="bold">98.5%</Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={98.5}
+                      sx={{
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        '& .MuiLinearProgress-bar': { backgroundColor: '#4caf50', borderRadius: 3 }
+                      }}
+                    />
+
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1} mt={3}>
+                      <Typography variant="body2" color="white">Threat Detection Rate</Typography>
+                      <Typography variant="body2" color="#00bcd4" fontWeight="bold">95.2%</Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={95.2}
+                      sx={{
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        '& .MuiLinearProgress-bar': { backgroundColor: '#00bcd4', borderRadius: 3 }
+                      }}
+                    />
+
+                    <Box display="flex" justifyContent="space-between" alignItems="center" mb={1} mt={3}>
+                      <Typography variant="body2" color="white">Response Time</Typography>
+                      <Typography variant="body2" color="#ff9800" fontWeight="bold">2.3s avg</Typography>
+                    </Box>
+                    <LinearProgress
+                      variant="determinate"
+                      value={85}
+                      sx={{
+                        height: 6,
+                        borderRadius: 3,
+                        backgroundColor: 'rgba(255,255,255,0.1)',
+                        '& .MuiLinearProgress-bar': { backgroundColor: '#ff9800', borderRadius: 3 }
+                      }}
+                    />
                   </Box>
                 </CardContent>
               </Card>
@@ -635,63 +833,71 @@ function SecurityMonitoring({ alerts, devices, onAcknowledgeAlert }) {
       {/* Alert Detail Dialog */}
       <Dialog 
         open={dialogOpen} 
-        onClose={() => setDialogOpen(false)}
+        onClose={handleDialogClose}
         maxWidth="md"
         fullWidth
+        PaperProps={{
+          sx: {
+            background: 'linear-gradient(135deg, #1a1f3a 0%, #2a2d5a 100%)',
+            border: '1px solid #00bcd4',
+            color: 'white'
+          }
+        }}
       >
-        <DialogTitle>
-          <Box display="flex" alignItems="center" gap={2}>
-            {selectedAlert && getSeverityIcon(selectedAlert.severity)}
-            Alert Details
-          </Box>
+        <DialogTitle sx={{ color: '#00bcd4' }}>
+          Security Alert Details
         </DialogTitle>
         <DialogContent>
           {selectedAlert && (
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">Alert Type</Typography>
-                <Typography variant="body1" gutterBottom>{selectedAlert.alert_type}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">Severity</Typography>
-                <Chip 
-                  label={selectedAlert.severity.toUpperCase()}
-                  color={getSeverityColor(selectedAlert.severity)}
-                  size="small"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Typography variant="subtitle2" color="textSecondary">Description</Typography>
-                <Typography variant="body1" gutterBottom>{selectedAlert.description}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">Device IP</Typography>
-                <Typography variant="body1" gutterBottom>{selectedAlert.device_ip}</Typography>
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <Typography variant="subtitle2" color="textSecondary">Timestamp</Typography>
-                <Typography variant="body1" gutterBottom>
-                  {new Date(selectedAlert.timestamp).toLocaleString()}
-                </Typography>
-              </Grid>
-              {selectedAlert.details && (
-                <Grid item xs={12}>
-                  <Typography variant="subtitle2" color="textSecondary">Additional Details</Typography>
-                  <Paper sx={{ p: 2, bgcolor: 'background.default' }}>
-                    <pre>{JSON.stringify(selectedAlert.details, null, 2)}</pre>
-                  </Paper>
+            <Box>
+              <Typography variant="h6" gutterBottom>
+                {selectedAlert.message}
+              </Typography>
+              <Grid container spacing={2} sx={{ mt: 2 }}>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="rgba(255,255,255,0.7)">
+                    Severity: <span style={{ color: getSeverityColor(selectedAlert.severity) }}>
+                      {selectedAlert.severity?.toUpperCase()}
+                    </span>
+                  </Typography>
                 </Grid>
-              )}
-            </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="rgba(255,255,255,0.7)">
+                    Source: {selectedAlert.source || 'Unknown'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="rgba(255,255,255,0.7)">
+                    Protocol: {selectedAlert.protocol || 'Unknown'}
+                  </Typography>
+                </Grid>
+                <Grid item xs={6}>
+                  <Typography variant="body2" color="rgba(255,255,255,0.7)">
+                    Time: {selectedAlert.timestamp ? new Date(selectedAlert.timestamp).toLocaleString() : 'N/A'}
+                  </Typography>
+                </Grid>
+              </Grid>
+            </Box>
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setDialogOpen(false)}>Close</Button>
-          {selectedAlert && !(selectedAlert.acknowledged || false) && (
+          <Button 
+            onClick={handleDialogClose}
+            sx={{ color: 'rgba(255,255,255,0.7)' }}
+          >
+            Close
+          </Button>
+          {selectedAlert && !selectedAlert.acknowledged && (
             <Button 
-              onClick={() => handleAcknowledgeAlert(selectedAlert.id)}
+              onClick={() => {
+                handleAcknowledgeAlert(selectedAlert.id);
+                handleDialogClose();
+              }}
               variant="contained"
-              color="primary"
+              sx={{
+                background: 'linear-gradient(135deg, #4caf50 0%, #388e3c 100%)',
+                color: 'white'
+              }}
             >
               Acknowledge
             </Button>

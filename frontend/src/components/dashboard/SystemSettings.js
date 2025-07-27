@@ -1,244 +1,348 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
+  Box,
+  Paper,
+  Typography,
+  Switch,
+  FormControlLabel,
+  Slider,
+  Select,
+  MenuItem,
+  FormControl,
+  InputLabel,
+  Divider,
+  Button,
   Grid,
   Card,
   CardContent,
-  Typography,
-  Box,
-  Switch,
-  FormControlLabel,
-  TextField,
-  Button,
-  Divider,
   Alert,
-  Chip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
+  Accordion,
+  AccordionSummary,
+  AccordionDetails,
+  Chip
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
-  Security as SecurityIcon,
   Notifications as NotificationsIcon,
-  Backup as BackupIcon,
-  Update as UpdateIcon,
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  Save as SaveIcon,
+  Security as SecurityIcon,
+  ExpandMore as ExpandMoreIcon,
+  Save as SaveIcon
 } from '@mui/icons-material';
 
-function SystemSettings({ onSave }) {
+function SystemSettings({ onSave, onSettingsUpdate }) {
   const [settings, setSettings] = useState({
-    realTimeMonitoring: true,
-    autoAlerts: true,
-    emailNotifications: false,
-    smsNotifications: false,
-    dataRetention: 30,
+    // Existing settings
+    autoRefresh: true,
     refreshInterval: 5,
-    apiTimeout: 30,
-    maxAlerts: 1000,
+    theme: 'dark',
+    
+    // New notification settings
+    notifications: {
+      enabled: true,
+      rateLimitSeconds: 10,
+      highVolumeThreshold: 10,
+      suppressHighVolume: true,
+      allowedSeverities: ['high', 'critical'],
+      allowedAttackTypes: ['dos', 'ddos', 'modbus_attack', 'probe', 'r2l', 'u2r'],
+      soundEnabled: true,
+      showCriticalDialog: true
+    }
   });
+  const [saveStatus, setSaveStatus] = useState('');
 
-  const handleSettingChange = (key, value) => {
-    setSettings(prev => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    // Load settings from localStorage
+    const savedSettings = localStorage.getItem('ot-sentinel-settings');
+    if (savedSettings) {
+      setSettings(prev => ({ ...prev, ...JSON.parse(savedSettings) }));
+    }
+  }, []);
+
+  const handleSettingChange = (path, value) => {
+    setSettings(prev => {
+      const newSettings = { ...prev };
+      const keys = path.split('.');
+      let current = newSettings;
+      
+      for (let i = 0; i < keys.length - 1; i++) {
+        if (!current[keys[i]]) current[keys[i]] = {};
+        current = current[keys[i]];
+      }
+      
+      current[keys[keys.length - 1]] = value;
+      return newSettings;
+    });
   };
 
-  const handleSave = () => {
-    onSave?.(settings);
+  const handleSaveSettings = () => {
+    localStorage.setItem('ot-sentinel-settings', JSON.stringify(settings));
+    if (onSave) {
+      onSave(settings);
+    }
+    if (onSettingsUpdate) {
+      onSettingsUpdate(settings);
+    }
+    setSaveStatus('Settings saved successfully!');
+    setTimeout(() => setSaveStatus(''), 3000);
   };
+
+  const attackTypeOptions = [
+    { value: 'dos', label: 'DoS Attacks', color: '#f44336' },
+    { value: 'ddos', label: 'DDoS Attacks', color: '#d32f2f' },
+    { value: 'modbus_attack', label: 'Modbus Attacks', color: '#e91e63' },
+    { value: 'probe', label: 'Network Probes', color: '#ff9800' },
+    { value: 'r2l', label: 'Remote-to-Local', color: '#9c27b0' },
+    { value: 'u2r', label: 'User-to-Root', color: '#ff5722' }
+  ];
 
   return (
-    <Box>
-      <Typography variant="h4" fontWeight="bold" color="primary" mb={3}>
+    <Box sx={{ p: 3 }}>
+      <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+        <SettingsIcon sx={{ mr: 2 }} />
         System Settings
       </Typography>
+
+      {saveStatus && (
+        <Alert severity="success" sx={{ mb: 3 }}>
+          {saveStatus}
+        </Alert>
+      )}
 
       <Grid container spacing={3}>
         {/* General Settings */}
         <Grid item xs={12} md={6}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
             <CardContent>
-              <Box display="flex" alignItems="center" gap={1} mb={2}>
-                <SettingsIcon color="primary" />
-                <Typography variant="h6" fontWeight="bold">
-                  General Settings
-                </Typography>
-              </Box>
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                <SettingsIcon sx={{ mr: 1 }} />
+                General Settings
+              </Typography>
               
-              <Box mb={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.realTimeMonitoring}
-                      onChange={(e) => handleSettingChange('realTimeMonitoring', e.target.checked)}
-                    />
-                  }
-                  label="Real-time Monitoring"
-                />
-              </Box>
-
-              <Box mb={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.autoAlerts}
-                      onChange={(e) => handleSettingChange('autoAlerts', e.target.checked)}
-                    />
-                  }
-                  label="Automatic Alerts"
-                />
-              </Box>
-
-              <TextField
-                fullWidth
-                label="Data Retention (days)"
-                type="number"
-                value={settings.dataRetention}
-                onChange={(e) => handleSettingChange('dataRetention', parseInt(e.target.value))}
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.autoRefresh}
+                    onChange={(e) => handleSettingChange('autoRefresh', e.target.checked)}
+                  />
+                }
+                label="Auto-refresh dashboard"
+                sx={{ display: 'block', mb: 2 }}
+              />
+              
+              <Typography gutterBottom>Refresh Interval (seconds)</Typography>
+              <Slider
+                value={settings.refreshInterval}
+                onChange={(e, value) => handleSettingChange('refreshInterval', value)}
+                min={1}
+                max={30}
+                step={1}
+                marks
+                valueLabelDisplay="auto"
                 sx={{ mb: 2 }}
               />
-
-              <TextField
-                fullWidth
-                label="Refresh Interval (seconds)"
-                type="number"
-                value={settings.refreshInterval}
-                onChange={(e) => handleSettingChange('refreshInterval', parseInt(e.target.value))}
-              />
+              
+              <FormControl fullWidth>
+                <InputLabel>Theme</InputLabel>
+                <Select
+                  value={settings.theme}
+                  onChange={(e) => handleSettingChange('theme', e.target.value)}
+                >
+                  <MenuItem value="dark">Dark</MenuItem>
+                  <MenuItem value="light">Light</MenuItem>
+                </Select>
+              </FormControl>
             </CardContent>
           </Card>
         </Grid>
 
         {/* Notification Settings */}
         <Grid item xs={12} md={6}>
-          <Card>
+          <Card sx={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
             <CardContent>
-              <Box display="flex" alignItems="center" gap={1} mb={2}>
-                <NotificationsIcon color="primary" />
-                <Typography variant="h6" fontWeight="bold">
-                  Notifications
-                </Typography>
-              </Box>
-
-              <Box mb={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.emailNotifications}
-                      onChange={(e) => handleSettingChange('emailNotifications', e.target.checked)}
-                    />
-                  }
-                  label="Email Notifications"
-                />
-              </Box>
-
-              <Box mb={2}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={settings.smsNotifications}
-                      onChange={(e) => handleSettingChange('smsNotifications', e.target.checked)}
-                    />
-                  }
-                  label="SMS Notifications"
-                />
-              </Box>
-
-              <TextField
-                fullWidth
-                label="Max Alerts"
-                type="number"
-                value={settings.maxAlerts}
-                onChange={(e) => handleSettingChange('maxAlerts', parseInt(e.target.value))}
-                sx={{ mb: 2 }}
-              />
-
-              <TextField
-                fullWidth
-                label="API Timeout (seconds)"
-                type="number"
-                value={settings.apiTimeout}
-                onChange={(e) => handleSettingChange('apiTimeout', parseInt(e.target.value))}
-              />
-            </CardContent>
-          </Card>
-        </Grid>
-
-        {/* System Information */}
-        <Grid item xs={12}>
-          <Card>
-            <CardContent>
-              <Typography variant="h6" fontWeight="bold" mb={2}>
-                System Information
+              <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+                <NotificationsIcon sx={{ mr: 1 }} />
+                Notification Settings
               </Typography>
               
-              <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
-                  <List>
-                    <ListItem>
-                      <ListItemText 
-                        primary="Version"
-                        secondary="OT Security Dashboard v1.0.0"
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={settings.notifications.enabled}
+                    onChange={(e) => handleSettingChange('notifications.enabled', e.target.checked)}
+                  />
+                }
+                label="Enable notifications"
+                sx={{ display: 'block', mb: 2 }}
+              />
+              
+              {settings.notifications.enabled && (
+                <>
+                  <Typography gutterBottom>Rate Limit (seconds between notifications)</Typography>
+                  <Slider
+                    value={settings.notifications.rateLimitSeconds}
+                    onChange={(e, value) => handleSettingChange('notifications.rateLimitSeconds', value)}
+                    min={5}
+                    max={60}
+                    step={5}
+                    marks={[
+                      { value: 5, label: '5s' },
+                      { value: 30, label: '30s' },
+                      { value: 60, label: '60s' }
+                    ]}
+                    valueLabelDisplay="auto"
+                    sx={{ mb: 3 }}
+                  />
+                  
+                  <Typography gutterBottom>High Volume Threshold</Typography>
+                  <Slider
+                    value={settings.notifications.highVolumeThreshold}
+                    onChange={(e, value) => handleSettingChange('notifications.highVolumeThreshold', value)}
+                    min={5}
+                    max={50}
+                    step={5}
+                    marks={[
+                      { value: 5, label: '5' },
+                      { value: 25, label: '25' },
+                      { value: 50, label: '50' }
+                    ]}
+                    valueLabelDisplay="auto"
+                    sx={{ mb: 2 }}
+                  />
+                  <Typography variant="caption" color="textSecondary" sx={{ display: 'block', mb: 3 }}>
+                    Suppress individual notifications when attack volume exceeds this threshold
+                  </Typography>
+                  
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settings.notifications.suppressHighVolume}
+                        onChange={(e) => handleSettingChange('notifications.suppressHighVolume', e.target.checked)}
                       />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText 
-                        primary="Last Update"
-                        secondary={new Date().toLocaleDateString()}
+                    }
+                    label="Suppress notifications during high volume attacks"
+                    sx={{ display: 'block', mb: 2 }}
+                  />
+                  
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settings.notifications.soundEnabled}
+                        onChange={(e) => handleSettingChange('notifications.soundEnabled', e.target.checked)}
                       />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText 
-                        primary="Database Status"
-                        secondary={<Chip label="Connected" color="success" size="small" />}
+                    }
+                    label="Sound notifications"
+                    sx={{ display: 'block', mb: 2 }}
+                  />
+                  
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={settings.notifications.showCriticalDialog}
+                        onChange={(e) => handleSettingChange('notifications.showCriticalDialog', e.target.checked)}
                       />
-                    </ListItem>
-                  </List>
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <List>
-                    <ListItem>
-                      <ListItemText 
-                        primary="Backend API"
-                        secondary={<Chip label="Online" color="success" size="small" />}
-                      />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText 
-                        primary="Redis Connection"
-                        secondary={<Chip label="Active" color="success" size="small" />}
-                      />
-                    </ListItem>
-                    <ListItem>
-                      <ListItemText 
-                        primary="WebSocket Status"
-                        secondary={<Chip label="Connected" color="success" size="small" />}
-                      />
-                    </ListItem>
-                  </List>
-                </Grid>
-              </Grid>
+                    }
+                    label="Show critical alert dialogs"
+                    sx={{ display: 'block', mb: 3 }}
+                  />
+                </>
+              )}
             </CardContent>
           </Card>
         </Grid>
 
-        {/* Save Button */}
+        {/* Advanced Notification Settings */}
         <Grid item xs={12}>
-          <Box display="flex" justifyContent="flex-end">
-            <Button
-              variant="contained"
-              color="primary"
-              startIcon={<SaveIcon />}
-              onClick={handleSave}
-              size="large"
-            >
-              Save Settings
-            </Button>
-          </Box>
+          <Accordion sx={{ backgroundColor: 'rgba(255, 255, 255, 0.05)' }}>
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6" sx={{ display: 'flex', alignItems: 'center' }}>
+                <SecurityIcon sx={{ mr: 1 }} />
+                Advanced Notification Filters
+              </Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={3}>
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Notification Severity Levels
+                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    {['low', 'medium', 'high', 'critical'].map((severity) => (
+                      <FormControlLabel
+                        key={severity}
+                        control={
+                          <Switch
+                            checked={settings.notifications.allowedSeverities.includes(severity)}
+                            onChange={(e) => {
+                              const newSeverities = e.target.checked
+                                ? [...settings.notifications.allowedSeverities, severity]
+                                : settings.notifications.allowedSeverities.filter(s => s !== severity);
+                              handleSettingChange('notifications.allowedSeverities', newSeverities);
+                            }}
+                          />
+                        }
+                        label={severity.charAt(0).toUpperCase() + severity.slice(1)}
+                        sx={{ display: 'block' }}
+                      />
+                    ))}
+                  </Box>
+                </Grid>
+                
+                <Grid item xs={12} md={6}>
+                  <Typography variant="subtitle1" gutterBottom>
+                    Attack Types to Monitor
+                  </Typography>
+                  <Box sx={{ mb: 2 }}>
+                    {attackTypeOptions.map((attackType) => (
+                      <Box key={attackType.value} sx={{ mb: 1 }}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={settings.notifications.allowedAttackTypes.includes(attackType.value)}
+                              onChange={(e) => {
+                                const newTypes = e.target.checked
+                                  ? [...settings.notifications.allowedAttackTypes, attackType.value]
+                                  : settings.notifications.allowedAttackTypes.filter(t => t !== attackType.value);
+                                handleSettingChange('notifications.allowedAttackTypes', newTypes);
+                              }}
+                            />
+                          }
+                          label={
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                              <Chip
+                                size="small"
+                                label={attackType.label}
+                                sx={{
+                                  backgroundColor: attackType.color,
+                                  color: 'white',
+                                  ml: 1
+                                }}
+                              />
+                            </Box>
+                          }
+                        />
+                      </Box>
+                    ))}
+                  </Box>
+                </Grid>
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
         </Grid>
       </Grid>
+
+      <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
+        <Button
+          variant="contained"
+          onClick={handleSaveSettings}
+          startIcon={<SaveIcon />}
+          sx={{ 
+            backgroundColor: '#4caf50',
+            '&:hover': { backgroundColor: '#45a049' }
+          }}
+        >
+          Save Settings
+        </Button>
+      </Box>
     </Box>
   );
 }

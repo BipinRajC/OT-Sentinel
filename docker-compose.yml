@@ -1,14 +1,12 @@
-version: '3.8'
-
 services:
   # PostgreSQL Database
   postgres:
     image: postgres:15-alpine
     container_name: ot-security-postgres
     environment:
-      - POSTGRES_USER=${POSTGRES_USER:-icsuser}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-icspassword}
-      - POSTGRES_DB=${POSTGRES_DB:-ics_security}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
     ports:
       - "5432:5432"
     networks:
@@ -16,8 +14,9 @@ services:
     restart: unless-stopped
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-icsuser} -d ${POSTGRES_DB:-ics_security}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -40,45 +39,34 @@ services:
       timeout: 5s
       retries: 5
 
-  # Backend API Service with GPU support
+  # Backend API Service (CPU-only)
   backend:
     build:
       context: .
-      dockerfile: backend/Dockerfile.gpu
+      dockerfile: backend/Dockerfile.cpu
     container_name: ot-security-backend
     ports:
-      - "8000:8000"
+      - "${BACKEND_PORT}:8000"
     environment:
-      - REDIS_URL=${REDIS_URL:-redis://redis:6379/0}
-      - DATABASE_URL=${DATABASE_URL:-postgresql://icsuser:icspassword@postgres:5432/ics_security}
+      - REDIS_URL=${REDIS_URL}
+      - DATABASE_URL=${DATABASE_URL}
       - API_HOST=0.0.0.0
       - API_PORT=8000
-      - CUDA_VISIBLE_DEVICES=0
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
-      - GOOGLE_GEMINI_API_KEY=${GOOGLE_GEMINI_API_KEY:-AIzaSyC-eF8ERBW2Qqa-rTxM5RECrEIrGk7HXkU}
-      - DATASET_PATH=${DATASET_PATH:-/app/trained_models/balanced_subset.csv}
+      - GOOGLE_GEMINI_API_KEY=${GOOGLE_GEMINI_API_KEY}
+      - DATASET_PATH=${DATASET_PATH}
     networks:
       - ot-security-network
     depends_on:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
     volumes:
       - ./simple_api.py:/app/simple_api.py
       - ./trained_models:/app/trained_models
       - ./backend/services/realtime_simulation_service.py:/app/services/realtime_simulation_service.py
       - ./backend/services/realtime_api.py:/app/services/realtime_api.py
-    # Note: GPU support disabled for macOS compatibility
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
 
   # Frontend Service
   frontend:
@@ -87,14 +75,14 @@ services:
       dockerfile: Dockerfile
     container_name: ot-security-frontend
     ports:
-      - "3000:80"
+      - "${FRONTEND_PORT}:80"
     networks:
       - ot-security-network
     depends_on:
       - backend
     restart: unless-stopped
     environment:
-      - REACT_APP_API_URL=http://localhost:8000
+      - REACT_APP_API_URL=${REACT_APP_API_URL}
 
 networks:
   ot-security-network:
